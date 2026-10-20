@@ -2,6 +2,7 @@
 import Base from '@/layouts/Base.astro';
 import PostItem from '@/components/posts/post-item/PostItem.astro';
 import Socials from '@/components/layout/socials/Socials.astro';
+import AsciiBoard from '@/components/home/ascii-board/AsciiBoard.astro';
 import { SITE, getPosts } from '@/lib/site';
 import styles from '@/styles/pages/home.module.css';
 
@@ -23,6 +24,7 @@ const jsonLd = {
 	<script slot="head" type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 
 	<section class={styles.hero}>
+		<AsciiBoard />
 		<h1 class={styles.title}>Hi, I'm {SITE.author}.</h1>
 		<p class={styles.lead}>
 			I write about math and computing. Most posts mix prose and equations with figures you can play

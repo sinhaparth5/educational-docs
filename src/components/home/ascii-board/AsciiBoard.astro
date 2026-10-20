@@ -1,0 +1,80 @@
+---
+import styles from './AsciiBoard.module.css';
+---
+
+<figure class={styles.board}>
+	<canvas class={styles.canvas} data-board aria-hidden="true"></canvas>
+	<figcaption class={styles.caption}>
+		Signals heat the copper; the heat spreads by ∂u/∂t = α∇²u. Hover to warm the board, click to
+		send a burst.
+	</figcaption>
+</figure>
+
+<script>
+	import { Board, STEP } from './board';
+
+	const canvas = document.querySelector<HTMLCanvasElement>('[data-board]');
+	if (canvas) {
+		const board = new Board(canvas);
+		const still = matchMedia('(prefers-reduced-motion: reduce)');
+		let raf = 0, last = 0, acc = 0, visible = true;
+
+		const resize = () => {
+			const r = canvas.getBoundingClientRect();
+			if (r.width < 1) return;
+			board.resize(r.width, r.height, Math.min(devicePixelRatio || 1, 2));
+			if (still.matches) drawStill();
+		};
+
+		// Reduced motion: one burst, let it travel a little, then show that single frame
+		const drawStill = () => {
+			board.burst();
+			for (let i = 0; i < 40; i++) board.step(STEP);
+			board.render();
+		};
+
+		const frame = (now: number) => {
+			acc += Math.min(0.1, (now - last) / 1000);
+			last = now;
+			for (let n = 0; acc >= STEP && n < 4; n++, acc -= STEP) board.step(STEP);
+			acc %= STEP;
+			board.render();
+			raf = requestAnimationFrame(frame);
+		};
+
+		const schedule = () => {
+			cancelAnimationFrame(raf);
+			if (!visible || still.matches) return;
+			last = performance.now();
+			raf = requestAnimationFrame(frame);
+		};
+
+		new ResizeObserver(resize).observe(canvas);
+		new IntersectionObserver(([e]) => {
+			visible = e.isIntersecting;
+			schedule();
+		}).observe(canvas);
+		// Canvas text doesn't trigger webfont loading, and the theme toggle changes the colours
+		document.fonts.ready.then(resize);
+		new MutationObserver(() => board.setColors()).observe(document.documentElement, {
+			attributes: true,
+			attributeFilter: ['data-theme'],
+		});
+
+		const local = (e: PointerEvent) => {
+			const r = canvas.getBoundingClientRect();
+			return { x: e.clientX - r.left, y: e.clientY - r.top };
+		};
+		canvas.addEventListener('pointermove', (e) => {
+			Object.assign(board.pointer, local(e), { active: e.pointerType !== 'touch' });
+		});
+		canvas.addEventListener('pointerleave', () => (board.pointer.active = false));
+		canvas.addEventListener('pointerdown', (e) => {
+			if (still.matches) return;
+			const { x, y } = local(e);
+			board.burst(x, y);
+		});
+
+		schedule();
+	}
+</script>
