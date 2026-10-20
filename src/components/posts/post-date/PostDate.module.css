@@ -1,0 +1,20 @@
+.meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem 1rem;
+	font-size: 0.875rem;
+	color: var(--muted);
+}
+
+.item {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
+.icon {
+	width: 1.05rem;
+	height: 1.05rem;
+	flex-shrink: 0;
+	stroke-width: 1.5;
+}

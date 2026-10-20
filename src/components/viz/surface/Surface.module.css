@@ -1,3 +1,4 @@
 .canvas {
-	height: 360px;
+	/* shorter on phones so the canvas isn't taller than it is wide */
+	height: min(360px, 75vw);
 }

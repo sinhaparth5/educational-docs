@@ -5,14 +5,23 @@ import styles from './Base.module.css';
 import Header from '@/components/layout/header/Header.astro';
 import Footer from '@/components/layout/footer/Footer.astro';
 import { SITE } from '@/lib/site';
+// Same files the @fontsource CSS points at, so the preload is reused, not downloaded twice
+import geistLatin from '@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url';
 
 interface Props {
 	title?: string;
 	description?: string;
 	ogImage?: string;
+	type?: 'website' | 'article';
 }
 
-const { title, description = SITE.description, ogImage = '/og/index.png' } = Astro.props;
+const {
+	title,
+	description = SITE.description,
+	ogImage = '/og/index.png',
+	type = 'website',
+} = Astro.props;
+const { analytics } = SITE;
 const fullTitle = title ? `${title} | ${SITE.title}` : SITE.title;
 ---
 
@@ -24,15 +33,25 @@ const fullTitle = title ? `${title} | ${SITE.title}` : SITE.title;
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<link rel="icon" href="/favicon.ico" />
 		<meta name="generator" content={Astro.generator} />
+		<link rel="preload" href={geistLatin} as="font" type="font/woff2" crossorigin />
 		<title>{fullTitle}</title>
 		<meta name="description" content={description} />
 		<link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
 		<link rel="sitemap" href="/sitemap-index.xml" />
 		<link rel="alternate" type="application/rss+xml" title={SITE.title} href="/rss.xml" />
+		<meta property="og:type" content={type} />
+		<meta property="og:site_name" content={SITE.title} />
+		<meta property="og:url" content={new URL(Astro.url.pathname, Astro.site)} />
 		<meta property="og:title" content={fullTitle} />
 		<meta property="og:description" content={description} />
 		<meta property="og:image" content={new URL(ogImage, Astro.site)} />
 		<meta name="twitter:card" content="summary_large_image" />
+		<slot name="head" />
+		{
+			analytics.websiteId && (
+				<script is:inline defer src={analytics.src} data-website-id={analytics.websiteId} />
+			)
+		}
 		<script is:inline>
 			// Before paint, so there's no light flash in dark mode
 			const t =
@@ -42,7 +61,7 @@ const fullTitle = title ? `${title} | ${SITE.title}` : SITE.title;
 		</script>
 	</head>
 	<body>
-		<a class:list={["sr-only", styles.skip]} href="#main">Skip to content</a>
+		<a class:list={['sr-only', styles.skip]} href="#main">Skip to content</a>
 		<Header />
 		<main id="main">
 			<slot />

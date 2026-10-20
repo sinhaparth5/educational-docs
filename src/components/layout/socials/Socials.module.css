@@ -1,0 +1,29 @@
+.socials {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.link {
+	display: grid;
+	place-items: center;
+	width: 2.25rem;
+	height: 2.25rem;
+	border-radius: 6px;
+	color: var(--muted);
+	transition: color 0.2s, background-color 0.2s;
+}
+.link:hover,
+.link:focus-visible {
+	color: var(--accent);
+	background: var(--hover);
+}
+
+.icon {
+	width: 1.35rem;
+	height: 1.35rem;
+	stroke-width: 1.5;
+}

@@ -1,25 +1,70 @@
 ---
 import Base from '@/layouts/Base.astro';
-import ArrowCard from '@/components/posts/arrow-card/ArrowCard.astro';
+import PostItem from '@/components/posts/post-item/PostItem.astro';
+import Socials from '@/components/layout/socials/Socials.astro';
 import { SITE, getPosts } from '@/lib/site';
 import styles from '@/styles/pages/home.module.css';
 
-const posts = (await getPosts()).slice(0, SITE.homePosts);
+const posts = await getPosts();
+const featured = posts.filter((p) => p.data.featured);
+const recent = posts.filter((p) => !p.data.featured).slice(0, SITE.recentPosts);
+
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'WebSite',
+	name: SITE.title,
+	description: SITE.description,
+	url: Astro.site,
+	author: { '@type': 'Person', name: SITE.author, url: SITE.socials.website },
+};
 ---
 
 <Base>
-	<section class={styles.intro}>
+	<script slot="head" type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
+	<section class={styles.hero}>
 		<h1 class={styles.title}>{SITE.title}</h1>
-		<p>{SITE.description}</p>
+		<p class={styles.lead}>{SITE.description}</p>
+		<p class={styles.lead}>
+			Read the blog posts or browse them by tag. Each post mixes prose and equations with small
+			visualizations you can drag and explore.
+		</p>
+		<div class={styles.social}>
+			<span class={styles.socialLabel}>Find me on</span>
+			<Socials />
+		</div>
 	</section>
 
-	<section>
-		<div class={styles.head}>
-			<h2 class={styles.heading}>Latest posts</h2>
-			<a href="/posts/" class={styles.all}>See all posts</a>
-		</div>
-		<ul class={styles.cards}>
-			{posts.map((post) => <li><ArrowCard post={post} /></li>)}
-		</ul>
-	</section>
+	{
+		featured.length > 0 && (
+			<section class={styles.section}>
+				<h2 class={styles.heading}>Featured</h2>
+				<ul class={styles.list}>
+					{featured.map((post) => (
+						<PostItem post={post} heading="h3" />
+					))}
+				</ul>
+			</section>
+		)
+	}
+
+	{
+		recent.length > 0 && (
+			<section class={styles.section}>
+				<h2 class={styles.heading}>Recent Posts</h2>
+				<ul class={styles.list}>
+					{recent.map((post) => (
+						<PostItem post={post} heading="h3" />
+					))}
+				</ul>
+			</section>
+		)
+	}
+
+	<div class={styles.more}>
+		<a href="/posts/" class={styles.all}>
+			All Posts
+			<svg class={styles.arrow} viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+		</a>
+	</div>
 </Base>

@@ -1,0 +1,58 @@
+---
+import type { MarkdownHeading } from 'astro';
+import styles from './Toc.module.css';
+
+interface Props {
+	headings: MarkdownHeading[];
+}
+
+const toc = Astro.props.headings.filter((h) => h.depth === 2 || h.depth === 3);
+---
+
+{
+	toc.length > 0 && (
+		<details open class={styles.toc} data-pagefind-ignore data-toc>
+			<summary class={styles.summary}>Table of contents</summary>
+			<ul class={styles.list}>
+				{toc.map((h) => (
+					<li class:list={[styles.item, { [styles.sub]: h.depth === 3 }]}>
+						<a href={`#${h.slug}`} class={styles.link}>
+							{h.text}
+						</a>
+					</li>
+				))}
+			</ul>
+		</details>
+	)
+}
+
+<script>
+	import styles from './Toc.module.css';
+
+	// Highlight the section being read: the last heading that has scrolled past the top
+	const toc = document.querySelector('[data-toc]');
+	if (toc) {
+		const links = [...toc.querySelectorAll<HTMLAnchorElement>('a')];
+		const headings = links.map((a) => document.getElementById(decodeURIComponent(a.hash.slice(1))));
+		let queued = false;
+		const update = () => {
+			queued = false;
+			let current = -1;
+			headings.forEach((h, i) => {
+				if (h && h.getBoundingClientRect().top < 120) current = i;
+			});
+			links.forEach((a, i) => {
+				a.classList.toggle(styles.active, i === current);
+				if (i === current) a.setAttribute('aria-current', 'location');
+				else a.removeAttribute('aria-current');
+			});
+		};
+		addEventListener('scroll', () => {
+			if (!queued) {
+				queued = true;
+				requestAnimationFrame(update);
+			}
+		}, { passive: true });
+		update();
+	}
+</script>

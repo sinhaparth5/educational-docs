@@ -66,6 +66,9 @@ function search() {
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://edu.parthsinha.com',
+	// Inline all CSS into each page: no render-blocking stylesheet requests on first visit,
+	// which matters most since readers usually land on a single post from a shared link
+	build: { inlineStylesheets: 'always' },
 	integrations: [
 		mdx(),
 		react(),
@@ -98,7 +101,8 @@ export default defineConfig({
 			],
 		}),
 		shikiConfig: {
-			themes: { light: 'github-light', dark: 'github-dark-dimmed' },
+			// Both chosen because every common token passes WCAG AA on our --code-bg colors
+			themes: { light: 'github-light-high-contrast', dark: 'everforest-dark' },
 		},
 	},
 	vite: {

@@ -1,59 +1,92 @@
 ---
 import { render } from 'astro:content';
 import Base from '@/layouts/Base.astro';
+import PostDate from '@/components/posts/post-date/PostDate.astro';
+import Toc from '@/components/posts/toc/Toc.astro';
+import SeriesNav from '@/components/posts/series-nav/SeriesNav.astro';
+import Share from '@/components/posts/share/Share.astro';
+import Related from '@/components/posts/related/Related.astro';
 import CopyCode from '@/components/posts/copy-code/CopyCode.astro';
+import Comments from '@/components/posts/comments/Comments.astro';
 import Theorem from '@/components/math/theorem/Theorem.astro';
 import Proof from '@/components/math/proof/Proof.astro';
 import Note from '@/components/math/note/Note.astro';
-import { formatDate, getPosts } from '@/lib/site';
+import Sidenote from '@/components/math/sidenote/Sidenote.astro';
+import { SITE, getPosts, readingTime, relatedPosts, seriesParts } from '@/lib/site';
 import styles from '@/styles/pages/post.module.css';
+import literataLatin from '@fontsource-variable/literata/files/literata-latin-wght-normal.woff2?url';
 
 export async function getStaticPaths() {
 	const posts = await getPosts();
 	// posts are newest first, so "next" (newer) is i - 1
 	return posts.map((post, i) => ({
 		params: { id: post.id },
-		props: { post, newer: posts[i - 1], older: posts[i + 1] },
+		props: {
+			post,
+			newer: posts[i - 1],
+			older: posts[i + 1],
+			related: relatedPosts(post, posts),
+			parts: seriesParts(post, posts),
+		},
 	}));
 }
 
-const { post, newer, older } = Astro.props;
+const { post, newer, older, related, parts } = Astro.props;
 const { Content, headings } = await render(post);
-const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
+const { title, description, date, updated, tags, draft } = post.data;
+const url = new URL(Astro.url.pathname, Astro.site).href;
+const ogImage = `/og/posts/${post.id}.png`;
+
+// Structured data so search engines can show author, dates and image
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'BlogPosting',
+	headline: title,
+	description,
+	url,
+	image: new URL(ogImage, Astro.site).href,
+	datePublished: date.toISOString(),
+	dateModified: (updated ?? date).toISOString(),
+	author: { '@type': 'Person', name: SITE.author, url: SITE.socials.website },
+	keywords: tags.join(', '),
+};
 ---
 
-<Base title={post.data.title} description={post.data.description} ogImage={`/og/posts/${post.id}.png`}>
+<Base title={title} description={description} ogImage={ogImage} type="article">
+	<Fragment slot="head">
+		<link rel="preload" href={literataLatin} as="font" type="font/woff2" crossorigin />
+		<meta property="article:published_time" content={date.toISOString()} />
+		{updated && <meta property="article:modified_time" content={updated.toISOString()} />}
+		{tags.map((tag) => <meta property="article:tag" content={tag} />)}
+		<script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+	</Fragment>
+
 	<div data-pagefind-body>
 		<a href="/posts/" class={styles.back} data-pagefind-ignore>← Back to posts</a>
 
-		<h1 class={styles.title}>{post.data.title}</h1>
+		<h1 class={styles.title}>
+			{title}
+			{draft && <span class={styles.draft}>Draft</span>}
+		</h1>
 		<div class={styles.meta}>
-			<time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
-			{post.data.tags.map((tag) => <a href={`/tags/${tag}/`} class={styles.tag}>#{tag}</a>)}
+			<PostDate date={date} updated={updated} minutes={readingTime(post)} />
+			<span class={styles.tags}>
+				{tags.map((tag) => <a href={`/tags/${tag}/`} class={styles.tag}>#{tag}</a>)}
+			</span>
 		</div>
 
-		{
-			toc.length > 0 && (
-				<details open class={styles.toc} data-pagefind-ignore>
-					<summary class={styles.summary}>Table of contents</summary>
-					<ul class={styles.tocList}>
-						{toc.map((h) => (
-							<li class:list={[styles.tocItem, { [styles.sub]: h.depth === 3 }]}>
-								<a href={`#${h.slug}`} class={styles.tocLink}>{h.text}</a>
-							</li>
-						))}
-					</ul>
-				</details>
-			)
-		}
+		<SeriesNav post={post} parts={parts} />
+		<Toc headings={headings} />
 
 		<article class="prose">
-			<Content components={{ Theorem, Proof, Note }} />
+			<Content components={{ Theorem, Proof, Note, Sidenote }} />
 		</article>
 	</div>
 	<CopyCode />
 
-	<nav class={styles.pager}>
+	<Share title={title} />
+
+	<nav class={styles.pager} aria-label="More posts">
 		{
 			older ? (
 				<a href={`/posts/${older.id}/`} class={styles.page}>
@@ -73,4 +106,7 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
 			)
 		}
 	</nav>
+
+	<Related posts={related} />
+	<Comments />
 </Base>

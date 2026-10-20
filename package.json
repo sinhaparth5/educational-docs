@@ -10,7 +10,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "check": "astro check"
+    "check": "astro check",
+    "new": "bun scripts/new-post.ts"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.3",
@@ -20,11 +21,14 @@
     "@astrojs/sitemap": "^3.7.4",
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
+    "@fontsource-variable/literata": "^5.3.0",
     "@resvg/resvg-js": "^2.6.2",
+    "@tabler/icons": "^3.49.0",
     "astro": "^7.4.1",
     "jsxgraph": "^1.14.0",
     "katex": "^0.19.0",
     "mafs": "^0.21.0",
+    "mathjs": "^15.2.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "rehype-autolink-headings": "^7.1.0",

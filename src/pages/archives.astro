@@ -1,0 +1,45 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getPosts } from '@/lib/site';
+import listing from '@/styles/pages/listing.module.css';
+import styles from '@/styles/pages/archives.module.css';
+
+const posts = await getPosts();
+const month = (d: Date) => d.toLocaleDateString('en-GB', { month: 'long' });
+const day = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+// { 2026: [posts…], 2025: […] }, newest year first (posts are already newest first)
+const byYear = Map.groupBy(posts, (p) => p.data.date.getFullYear());
+---
+
+<Base title="Archives" description="All posts, by year.">
+	<h1 class={listing.heading}>Archives</h1>
+	<p class={listing.sub}>All the articles I've archived, by year.</p>
+
+	{
+		[...byYear].map(([year, yearPosts]) => (
+			<section class={styles.year}>
+				<h2 class={styles.yearHeading}>
+					{year} <sup class={styles.count}>{yearPosts.length}</sup>
+				</h2>
+				{[...Map.groupBy(yearPosts, (p) => month(p.data.date))].map(([name, monthPosts]) => (
+					<div class={styles.month}>
+						<h3 class={styles.monthHeading}>{name}</h3>
+						<ul class={styles.list}>
+							{monthPosts.map((post) => (
+								<li class={styles.item}>
+									<time class={styles.date} datetime={post.data.date.toISOString()}>
+										{day(post.data.date)}
+									</time>
+									<a href={`/posts/${post.id}/`} class={styles.link}>
+										{post.data.title}
+									</a>
+								</li>
+							))}
+						</ul>
+					</div>
+				))}
+			</section>
+		))
+	}
+</Base>

@@ -1,0 +1,36 @@
+.series {
+	margin: 2rem 0;
+	padding: 0.75rem 1rem;
+	border: 1px solid var(--border);
+	border-left: 3px solid var(--accent);
+	border-radius: 0 8px 8px 0;
+	font-size: 0.875rem;
+}
+
+.head {
+	margin: 0 0 0.5rem;
+	color: var(--muted);
+}
+.head strong {
+	color: var(--fg-strong);
+}
+
+.list {
+	margin: 0;
+	padding-left: 1.25rem;
+}
+.item {
+	padding: 0.1rem 0;
+}
+
+.link {
+	text-underline-offset: 3px;
+	text-decoration-color: var(--border);
+}
+.link:hover {
+	color: var(--accent);
+}
+.current {
+	font-weight: 600;
+	color: var(--accent);
+}

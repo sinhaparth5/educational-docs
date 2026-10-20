@@ -1,11 +1,14 @@
 ---
 title: Math demo
-description: KaTeX, code highlighting and four interactive visualization libraries in one post.
-date: 2026-10-20
+description: KaTeX, code highlighting, margin notes and interactive visualizations in one post.
+date: 2026-10-18
+updated: 2026-10-20
+featured: true
 tags: [math, demo]
 ---
 
 import TangentLine from '@/components/viz/tangent-line/TangentLine.tsx';
+import FunctionPlot from '@/components/viz/function-plot/FunctionPlot.tsx';
 import Midpoint from '@/components/viz/midpoint/Midpoint.tsx';
 import Surface from '@/components/viz/surface/Surface.tsx';
 
@@ -42,6 +45,10 @@ $f'(x) = \lim_{h \to 0} \dfrac{f(x+h) - f(x)}{h}$, when the limit exists.
 
 </Theorem>
 
+Margin notes work too: the Basel problem<Sidenote>Solved by Euler in 1734, after resisting
+the best mathematicians for ninety years.</Sidenote> asks for $\sum 1/n^2$, which turns out to be
+$\pi^2/6$.
+
 <Note type="tip">
 
 Leave a blank line after the opening tag so the content is parsed as Markdown.
@@ -53,6 +60,12 @@ Leave a blank line after the opening tag so the content is parsed as Markdown.
 The derivative of $\sin x$ is $\cos x$. Drag the point:
 
 <TangentLine client:visible />
+
+## Explore a function
+
+Edit the formula or drag the sliders:
+
+<FunctionPlot client:visible expr="a * sin(b * x)" params={{ a: [0, 3, 1], b: [0.5, 4, 1] }} />
 
 ## Midpoint construction (JSXGraph)
 

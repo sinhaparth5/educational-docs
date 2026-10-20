@@ -1,0 +1,24 @@
+---
+import PostItem from '@/components/posts/post-item/PostItem.astro';
+import type { Post } from '@/lib/site';
+import styles from './Related.module.css';
+
+interface Props {
+	posts: Post[];
+}
+
+const { posts } = Astro.props;
+---
+
+{
+	posts.length > 0 && (
+		<section class={styles.related} aria-labelledby="related-heading" data-pagefind-ignore>
+			<h2 id="related-heading" class={styles.heading}>Related posts</h2>
+			<ul class={styles.list}>
+				{posts.map((post) => (
+					<PostItem post={post} heading="h3" />
+				))}
+			</ul>
+		</section>
+	)
+}

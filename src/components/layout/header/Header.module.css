@@ -19,6 +19,7 @@
 
 .title {
 	font-weight: 600;
+	white-space: nowrap;
 	color: var(--fg-strong);
 	text-decoration: none;
 }
@@ -77,4 +78,18 @@
 :global([data-theme='dark']) .sun {
 	opacity: 1;
 	transform: none;
+}
+
+/* Smallest phones (≤ 400px): tighten spacing so everything fits on one row */
+@media (max-width: 400px) {
+	.bar {
+		gap: 0.5rem;
+	}
+	.nav {
+		gap: 0.5rem;
+		font-size: 0.875rem;
+	}
+	.toggle {
+		width: 1.75rem;
+	}
 }

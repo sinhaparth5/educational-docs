@@ -1,0 +1,32 @@
+---
+import type { Post } from '@/lib/site';
+import styles from './SeriesNav.module.css';
+
+interface Props {
+	post: Post;
+	parts: Post[];
+}
+
+const { post, parts } = Astro.props;
+---
+
+{
+	parts.length > 1 && (
+		<nav class={styles.series} aria-label="Series" data-pagefind-ignore>
+			<p class={styles.head}>
+				Part {post.data.series!.part} of {parts.length} in <strong>{post.data.series!.name}</strong>
+			</p>
+			<ol class={styles.list}>
+				{parts.map((p) => (
+					<li class={styles.item}>
+						{p.id === post.id ? (
+							<span class={styles.current} aria-current="page">{p.data.title}</span>
+						) : (
+							<a href={`/posts/${p.id}/`} class={styles.link}>{p.data.title}</a>
+						)}
+					</li>
+				))}
+			</ol>
+		</nav>
+	)
+}

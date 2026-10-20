@@ -9,6 +9,8 @@ const posts = await getPosts();
 
 <Base title="Posts" description="All posts.">
 	<h1 class={styles.heading}>Posts</h1>
-	<p class={styles.sub}>All the articles I've posted.</p>
+	<p class={styles.sub}>
+		All the articles I've posted. Prefer a timeline? See the <a href="/archives/">archives</a>.
+	</p>
 	<ul class={styles.list}>{posts.map((post) => <PostItem post={post} />)}</ul>
 </Base>

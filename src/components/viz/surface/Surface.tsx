@@ -23,6 +23,7 @@ export default function Surface() {
 		const scene = new THREE.Scene();
 		const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
 		camera.position.set(6, 4.5, 6);
+		const baseDistance = camera.position.length();
 		const controls = new OrbitControls(camera, renderer.domElement);
 		controls.enableDamping = true;
 		controls.enableZoom = false; // let the page scroll over the canvas
@@ -66,6 +67,8 @@ export default function Surface() {
 			renderer.setSize(w, h);
 			camera.aspect = w / h;
 			camera.updateProjectionMatrix();
+			// Narrow canvases crop the sides, so pull the camera back to keep the surface in frame
+			camera.position.setLength(baseDistance * Math.max(1, 1.5 / camera.aspect));
 		};
 		const resizer = new ResizeObserver(resize);
 		resizer.observe(el);

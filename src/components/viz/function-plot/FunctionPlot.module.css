@@ -1,0 +1,61 @@
+.plot {
+	margin: 1.5rem 0;
+}
+
+.formula {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-bottom: 0.5rem;
+	font-family: var(--mono);
+	font-size: 0.9rem;
+}
+.fx {
+	color: var(--muted);
+	white-space: nowrap;
+}
+.input {
+	flex: 1;
+	min-width: 0;
+	padding: 0.35rem 0.6rem;
+	font: inherit;
+	color: var(--fg-strong);
+	background: var(--code-bg);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+}
+.input:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 0;
+}
+.input[aria-invalid='true'] {
+	border-color: #c2410c;
+}
+
+.error {
+	margin: 0 0 0.5rem;
+	font: 0.8rem var(--mono);
+	color: #c2410c;
+}
+
+.slider {
+	display: grid;
+	grid-template-columns: 1.5rem 1fr 3rem;
+	align-items: center;
+	gap: 0.75rem;
+	margin-top: 0.5rem;
+	font-family: var(--mono);
+	font-size: 0.875rem;
+}
+.slider input {
+	width: 100%;
+	accent-color: var(--accent);
+}
+.name {
+	font-style: italic;
+	text-align: right;
+}
+.value {
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+}

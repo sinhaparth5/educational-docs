@@ -1,0 +1,57 @@
+/* Numbering via a counter on .prose (see global.css) */
+.number {
+	counter-increment: sidenote;
+	cursor: pointer;
+}
+.number::after,
+.note::before {
+	content: counter(sidenote);
+	font-family: var(--sans);
+	font-size: 0.7em;
+	color: var(--accent);
+}
+.number::after {
+	position: relative;
+	top: -0.5em;
+	margin-left: 0.1em;
+}
+.note::before {
+	margin-right: 0.35em;
+	vertical-align: 0.3em;
+}
+
+.toggle {
+	display: none;
+}
+
+/* Narrow: hidden until the number is tapped, then shown as an inset block */
+.note {
+	display: none;
+	margin: 0.75rem 0;
+	padding: 0.5rem 0.75rem;
+	font-size: 0.875rem;
+	line-height: 1.5;
+	color: var(--muted);
+	border-left: 2px solid var(--border);
+}
+.toggle:checked + .note {
+	display: block;
+}
+
+/* Wide: always visible in the right margin, next to the line it belongs to */
+@media (min-width: 1240px) {
+	.number {
+		cursor: default;
+		pointer-events: none;
+	}
+	.note,
+	.toggle:checked + .note {
+		display: block;
+		float: right;
+		clear: right;
+		width: 220px;
+		margin: 0.25rem -250px 0.75rem 0;
+		padding: 0;
+		border: 0;
+	}
+}

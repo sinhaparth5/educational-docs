@@ -4,8 +4,8 @@ export type Theme = 'light' | 'dark';
 
 // Canvas libs can't read CSS variables, so islands get the theme as plain colors
 export const palette = {
-	light: { bg: '#f5f5f5', fg: '#404040', grid: '#d4d4d4', accent: '#006cac' },
-	dark: { bg: '#171717', fg: '#bfbfbf', grid: '#404040', accent: '#ff6b01' },
+	light: { bg: '#f8f6f1', fg: '#4a4640', grid: '#dcd8cf', accent: '#2c6e69' },
+	dark: { bg: '#1c1b19', fg: '#b8b3a8', grid: '#3a3833', accent: '#8fc3ba' },
 };
 
 const current = (): Theme =>

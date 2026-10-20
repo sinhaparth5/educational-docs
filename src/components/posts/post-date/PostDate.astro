@@ -1,0 +1,33 @@
+---
+import Calendar from '@tabler/icons/outline/calendar.svg';
+import Clock from '@tabler/icons/outline/clock.svg';
+import { formatDate } from '@/lib/site';
+import styles from './PostDate.module.css';
+
+interface Props {
+	date: Date;
+	updated?: Date;
+	minutes?: number;
+}
+
+const { date, updated, minutes } = Astro.props;
+// Like AstroPaper: show the edit date instead when the post was changed later
+const isUpdated = updated && updated > date;
+const shown = isUpdated ? updated : date;
+---
+
+<div class={styles.meta}>
+	<span class={styles.item}>
+		<Calendar class={styles.icon} aria-hidden="true" />
+		{isUpdated && <span>Updated:</span>}
+		<time datetime={shown.toISOString()}>{formatDate(shown)}</time>
+	</span>
+	{
+		minutes && (
+			<span class={styles.item}>
+				<Clock class={styles.icon} aria-hidden="true" />
+				{minutes} min read
+			</span>
+		)
+	}
+</div>

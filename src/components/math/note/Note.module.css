@@ -6,11 +6,18 @@
 	border-radius: 6px;
 	background: color-mix(in srgb, var(--c) 6%, transparent);
 }
+/* Darker in light mode, lighter in dark mode, so the label passes WCAG AA either way */
 .tip {
-	--c: #16a34a;
+	--c: #166534;
 }
 .warning {
-	--c: #d97706;
+	--c: #92400e;
+}
+:global([data-theme='dark']) .tip {
+	--c: #4ade80;
+}
+:global([data-theme='dark']) .warning {
+	--c: #fbbf24;
 }
 
 .head {

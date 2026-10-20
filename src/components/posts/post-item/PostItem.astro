@@ -1,13 +1,24 @@
 ---
-import type { CollectionEntry } from 'astro:content';
-import { formatDate } from '@/lib/site';
+import PostDate from '@/components/posts/post-date/PostDate.astro';
+import { readingTime, type Post } from '@/lib/site';
 import styles from './PostItem.module.css';
 
-const { post } = Astro.props as { post: CollectionEntry<'posts'> };
+interface Props {
+	post: Post;
+	// h3 when the list sits under its own h2 (e.g. "Featured" on the home page)
+	heading?: 'h2' | 'h3';
+}
+
+const { post, heading: Heading = 'h2' } = Astro.props;
 ---
 
 <li class={styles.item}>
-	<a href={`/posts/${post.id}/`} class={styles.link}><h2 class={styles.title}>{post.data.title}</h2></a>
-	<time class={styles.date} datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
+	<a href={`/posts/${post.id}/`} class={styles.link}>
+		<Heading class={styles.title}>
+			{post.data.title}
+			{post.data.draft && <span class={styles.draft}>Draft</span>}
+		</Heading>
+	</a>
+	<PostDate date={post.data.date} updated={post.data.updated} minutes={readingTime(post)} />
 	<p class={styles.desc}>{post.data.description}</p>
 </li>

@@ -13,17 +13,27 @@
 }
 
 .title {
-	margin: 0;
+	margin: 0 0 0.15rem;
 	font-size: 1.125rem;
 	font-weight: 500;
 	color: inherit;
 }
 
-.date {
-	font-size: 0.875rem;
-	color: var(--muted);
-}
 
 .desc {
 	margin: 0.25rem 0 0;
+}
+
+/* Only rendered under `astro dev`; drafts never reach a build */
+.draft {
+	margin-left: 0.5rem;
+	padding: 0.05rem 0.4rem;
+	font-size: 0.7rem;
+	font-weight: 600;
+	vertical-align: middle;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--muted);
+	border: 1px dashed var(--border);
+	border-radius: 4px;
 }

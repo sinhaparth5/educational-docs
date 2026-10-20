@@ -1,0 +1,63 @@
+.year {
+	margin-bottom: 2.5rem;
+}
+
+.yearHeading {
+	margin: 0 0 1rem;
+	font-size: 1.5rem;
+}
+.count {
+	font-size: 0.75rem;
+	font-weight: 500;
+	color: var(--muted);
+}
+
+.month {
+	display: grid;
+	grid-template-columns: 7rem 1fr;
+	gap: 1rem;
+	padding: 0.75rem 0;
+	border-top: 1px solid var(--border);
+}
+
+.monthHeading {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 500;
+	color: var(--muted);
+}
+
+.list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.item {
+	display: flex;
+	gap: 0.75rem;
+	padding: 0.15rem 0;
+}
+
+.date {
+	flex-shrink: 0;
+	width: 3.5rem;
+	font-size: 0.875rem;
+	color: var(--muted);
+}
+
+.link {
+	color: var(--accent);
+	text-decoration: none;
+	text-underline-offset: 4px;
+}
+.link:hover {
+	text-decoration: underline dashed;
+}
+
+@media (max-width: 480px) {
+	.month {
+		grid-template-columns: 1fr;
+		gap: 0.25rem;
+	}
+}

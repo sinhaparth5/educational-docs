@@ -1,0 +1,91 @@
+---
+import LinkIcon from '@tabler/icons/outline/link.svg';
+import Check from '@tabler/icons/outline/check.svg';
+import ShareIcon from '@tabler/icons/outline/share.svg';
+import X from '@tabler/icons/outline/brand-x.svg';
+import Linkedin from '@tabler/icons/outline/brand-linkedin.svg';
+import Reddit from '@tabler/icons/outline/brand-reddit.svg';
+import Bluesky from '@tabler/icons/outline/brand-bluesky.svg';
+import Mail from '@tabler/icons/outline/mail.svg';
+import styles from './Share.module.css';
+
+interface Props {
+	title: string;
+}
+
+const { title } = Astro.props;
+const url = new URL(Astro.url.pathname, Astro.site).href;
+const u = encodeURIComponent(url);
+const t = encodeURIComponent(title);
+
+const targets = [
+	{ label: 'Share on X', Icon: X, href: `https://x.com/intent/post?url=${u}&text=${t}` },
+	{ label: 'Share on LinkedIn', Icon: Linkedin, href: `https://www.linkedin.com/sharing/share-offsite/?url=${u}` },
+	{ label: 'Share on Reddit', Icon: Reddit, href: `https://www.reddit.com/submit?url=${u}&title=${t}` },
+	{ label: 'Share on Bluesky', Icon: Bluesky, href: `https://bsky.app/intent/compose?text=${t}%20${u}` },
+	{ label: 'Share by email', Icon: Mail, href: `mailto:?subject=${t}&body=${u}` },
+];
+---
+
+<div class={styles.share} data-share data-url={url} data-title={title}>
+	<span class={styles.label}>Share this post</span>
+	<ul class={styles.list}>
+		<li>
+			<button type="button" class={styles.button} data-copy aria-label="Copy link" title="Copy link">
+				<LinkIcon class:list={[styles.icon, styles.copyIcon]} aria-hidden="true" />
+				<Check class:list={[styles.icon, styles.doneIcon]} aria-hidden="true" />
+			</button>
+		</li>
+		{
+			targets.map(({ label, Icon, href }) => (
+				<li>
+					<a
+						href={href}
+						class={styles.button}
+						aria-label={label}
+						title={label}
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						<Icon class={styles.icon} aria-hidden="true" />
+					</a>
+				</li>
+			))
+		}
+		<li hidden data-native>
+			<button type="button" class={styles.button} aria-label="More sharing options" title="More…">
+				<ShareIcon class={styles.icon} aria-hidden="true" />
+			</button>
+		</li>
+	</ul>
+	<span class="sr-only" role="status" data-status></span>
+</div>
+
+<script>
+	import styles from './Share.module.css';
+
+	for (const box of document.querySelectorAll<HTMLElement>('[data-share]')) {
+		const { url = location.href, title = document.title } = box.dataset;
+		const status = box.querySelector<HTMLElement>('[data-status]')!;
+		const copy = box.querySelector<HTMLButtonElement>('[data-copy]')!;
+
+		copy.addEventListener('click', async () => {
+			await navigator.clipboard.writeText(url);
+			copy.classList.add(styles.done);
+			status.textContent = 'Link copied';
+			setTimeout(() => {
+				copy.classList.remove(styles.done);
+				status.textContent = '';
+			}, 1500);
+		});
+
+		// The OS share sheet (mostly phones); hidden where unsupported
+		const native = box.querySelector<HTMLElement>('[data-native]')!;
+		if (navigator.share) {
+			native.hidden = false;
+			native.querySelector('button')!.addEventListener('click', () =>
+				navigator.share({ title, url }).catch(() => {}), // user closed the sheet
+			);
+		}
+	}
+</script>

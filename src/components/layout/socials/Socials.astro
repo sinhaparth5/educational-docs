@@ -1,0 +1,39 @@
+---
+import Mail from '@tabler/icons/outline/mail.svg';
+import World from '@tabler/icons/outline/world.svg';
+import Linkedin from '@tabler/icons/outline/brand-linkedin.svg';
+import X from '@tabler/icons/outline/brand-x.svg';
+import Github from '@tabler/icons/outline/brand-github.svg';
+import Rss from '@tabler/icons/outline/rss.svg';
+import { SITE } from '@/lib/site';
+import styles from './Socials.module.css';
+
+const { email, website, linkedin, x, github } = SITE.socials;
+// Entries with an empty URL in SITE.socials are skipped
+const links = [
+	{ href: email && `mailto:${email}`, label: 'Email', Icon: Mail },
+	{ href: website, label: 'Website', Icon: World },
+	{ href: linkedin, label: 'LinkedIn', Icon: Linkedin },
+	{ href: x, label: 'X (Twitter)', Icon: X },
+	{ href: github, label: 'GitHub', Icon: Github },
+	{ href: '/rss.xml', label: 'RSS feed', Icon: Rss },
+].filter((l) => l.href);
+---
+
+<ul class={styles.socials}>
+	{
+		links.map(({ href, label, Icon }) => (
+			<li>
+				<a
+					href={href}
+					class={styles.link}
+					aria-label={label}
+					title={label}
+					{...(href.startsWith('http') && { target: '_blank', rel: 'me noopener' })}
+				>
+					<Icon class={styles.icon} aria-hidden="true" />
+				</a>
+			</li>
+		))
+	}
+</ul>

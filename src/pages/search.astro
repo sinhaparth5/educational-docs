@@ -16,6 +16,8 @@ import styles from '@/styles/pages/search.module.css';
 		// The index only exists after `astro build`, so this is empty under `astro dev`
 		if (window.PagefindUI) {
 			new PagefindUI({ element: '#search', showImages: false, showSubResults: true, autofocus: true });
+			// Pagefind's input only has a placeholder; give it a real accessible name
+			document.querySelector('.pagefind-ui__search-input')?.setAttribute('aria-label', 'Search posts');
 		} else {
 			document.getElementById('search').textContent = 'Search works after `bun run build` (try `bun run preview`).';
 		}

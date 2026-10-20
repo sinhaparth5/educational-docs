@@ -1,0 +1,95 @@
+/* Phones and tablets: a collapsible box above the post (Astro Micro style) */
+.toc {
+	margin: 2rem 0;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	font-size: 0.875rem;
+}
+.summary {
+	padding: 0.4rem 0.75rem;
+	font-weight: 500;
+	cursor: pointer;
+	border-radius: 8px 8px 0 0;
+}
+.toc[open] .summary,
+.summary:hover {
+	background: var(--hover);
+}
+.list {
+	margin: 0;
+	padding: 0.75rem 0.75rem 0.75rem 2.25rem;
+}
+.item {
+	padding: 0.15rem 0;
+}
+.sub {
+	margin-left: 1rem;
+}
+.link {
+	text-underline-offset: 3px;
+	text-decoration-color: var(--border);
+}
+.active {
+	color: var(--accent);
+	font-weight: 500;
+}
+
+/* Wide screens: pinned in the left margin, highlighting the current section */
+@media (min-width: 1240px) {
+	.toc {
+		position: fixed;
+		top: 6rem;
+		left: max(1rem, calc(50% - 360px - 250px));
+		width: 220px;
+		max-height: calc(100vh - 8rem);
+		overflow-y: auto;
+		margin: 0;
+		border: 0;
+	}
+	.summary {
+		padding: 0 0 0.5rem;
+		color: var(--muted);
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		list-style: none;
+		pointer-events: none; /* always open here */
+	}
+	.summary::-webkit-details-marker {
+		display: none;
+	}
+	.toc[open] .summary,
+	.summary:hover {
+		background: none;
+	}
+	.list {
+		padding: 0;
+		list-style: none;
+		border-left: 1px solid var(--border);
+	}
+	.item {
+		padding: 0.2rem 0 0.2rem 0.75rem;
+	}
+	.link {
+		display: block;
+		text-decoration: none;
+		color: var(--muted);
+	}
+	.link:hover {
+		color: var(--fg-strong);
+	}
+	.active {
+		position: relative;
+		color: var(--accent);
+	}
+	/* accent bar drawn over the list's left border */
+	.active::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: calc(-0.75rem - 1px);
+		width: 2px;
+		background: var(--accent);
+	}
+}
