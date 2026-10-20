@@ -141,6 +141,7 @@ a {
 .prose .katex-display {
 	overflow-x: auto;
 	overflow-y: hidden;
+	padding: 0.5em 0; /* room for superscripts, which overflow-y would otherwise clip */
 }
 
 /* Markdown tables: scroll sideways inside themselves on narrow screens instead of

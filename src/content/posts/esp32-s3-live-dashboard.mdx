@@ -1,0 +1,418 @@
+---
+title: A Live Dashboard Served from an ESP32-S3
+description: Wi-Fi, HTTP, WebSockets, WS2812 LEDs and FreeRTOS tasks from the ground up, then how I put them together into a React dashboard that runs straight off the chip.
+date: 2026-10-20
+cover: ./images/esp32-s3-live-dashboard.jpg
+coverAlt: An ESP32-S3 dev board with a glowing blue LED and a magnified view of its chip, sending Wi-Fi signal lines to a floating browser dashboard with live sparkline cards
+tags: [esp32, embedded, websocket, react]
+---
+
+I wanted to see what my ESP32-S3 was doing without staring at a serial monitor. The result is a
+small project [@esp32s3_dashboard_repo]: the board joins my Wi-Fi, serves a React dashboard from
+its own flash, and pushes live telemetry to the browser once a second over a WebSocket. The
+browser can send commands back, like "scan for networks" or "make the LED orange".
+
+The code is on GitHub at
+[sinhaparth5/esp32s3_dashboard](https://github.com/sinhaparth5/esp32s3_dashboard).
+
+The project touches a lot of separate ideas, so the first half of this post covers the basics one
+at a time. The second half is the project itself and the problems I ran into building it.
+
+## Part 1: the basics
+
+### What's on an ESP32-S3
+
+The ESP32-S3 is a system on a chip (SoC): the processor, the memory, the radio and most of the
+peripherals sit on one piece of silicon [@esp32s3_datasheet].
+
+| Part | What the S3 has |
+| :-- | :-- |
+| CPU | 2 × Xtensa LX7 cores, up to 240 MHz, with an FPU and SIMD instructions |
+| Memory | 512 KB SRAM, 384 KB ROM, 16 KB RTC SRAM |
+| Radio | 2.4 GHz Wi-Fi (802.11b/g/n) and Bluetooth 5 (LE) |
+| I/O | 45 GPIOs, 14 of them capacitive touch, plus USB OTG, I2C, SPI, I2S, UART, RMT |
+| Low power | ULP-RISC-V and ULP-FSM coprocessors for work while the main cores sleep |
+
+Program code doesn't fit in 512 KB of SRAM, so it lives in external flash (16 MB on my DevKitC-1)
+and runs through a cache. That matters later, because the whole website ends up in that flash
+too.
+
+### Firmware is a set of tasks, not one program
+
+On an Arduino you write `setup()` and `loop()`, and that's the whole machine. ESP-IDF, Espressif's
+official framework, runs FreeRTOS underneath. FreeRTOS is a small real-time operating system
+whose main job is scheduling tasks: independent functions, each with its own stack, that the
+scheduler switches between.
+
+Even a simple app like mine ends up with several:
+
+- `app_main` is a task. Mine reads sensors and broadcasts telemetry in an endless loop.
+- The Wi-Fi driver runs its own task and reports what happens (connected, got an IP, scan done)
+  as events.
+- The default event loop runs on a system event task, which calls my event handler.
+- The HTTP server runs on its own task and calls my URI handlers.
+
+Two consequences come up again and again. First, anything touched by more than one task (like
+the LED) needs a lock. Second, a task's stack is a fixed size chosen at compile time. Go past it
+and the chip resets.
+
+### Joining Wi-Fi
+
+The board runs in station mode, meaning it joins an existing network the way a laptop does,
+instead of creating its own. The sequence is:
+
+1. Start the driver and call `esp_wifi_connect()`.
+2. Associate and authenticate with the access point (the WPA2 four-way handshake).
+3. Ask the router for an IP address over DHCP.
+4. Get `IP_EVENT_STA_GOT_IP`. Only now can anything talk to the board.
+
+If it fails, the disconnect event carries a reason code that says why. The table near the end of
+this post lists the ones you'll see most.
+
+Signal strength is reported as RSSI in dBm, which is power on a log scale relative to one
+milliwatt:
+
+$$
+P = 1\,\text{mW} \times 10^{\text{dBm}/10}
+$$
+
+So −50 dBm is $10^{-5}$ mW, or 10 nanowatts, and every 10 dB down is ten times less power. That's
+why the numbers are all negative and why −67 dBm is a lot worse than −55 dBm, even though they
+look close. The dashboard labels −55 and above as excellent, down to −67 as good, down to −75 as
+fair, and anything lower as weak.
+
+### HTTP asks, but it can't push
+
+HTTP is request and response. The browser asks for `/`, the server answers, and the exchange is
+over. That's perfect for loading the page, but not for live data. To get a new reading every
+second over plain HTTP, the browser has to keep asking (polling), and each request pays for new
+headers and often a new TCP connection.
+
+A WebSocket fixes that [@rfc6455]. It starts life as an ordinary HTTP GET with a few extra
+headers:
+
+```http
+GET /ws HTTP/1.1
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Version: 13
+Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
+```
+
+The key is 16 random bytes, base64-encoded. The server proves it understood the request by
+appending the fixed GUID `258EAFA5-E914-47DA-95CA-C5AB0DC85B11`, hashing the result with SHA-1
+and sending it back base64-encoded:
+
+```http
+HTTP/1.1 101 Switching Protocols
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+```
+
+You can check that value yourself:
+
+```sh
+echo -n 'dGhlIHNhbXBsZSBub25jZQ==258EAFA5-E914-47DA-95CA-C5AB0DC85B11' \
+  | openssl sha1 -binary | base64
+```
+
+After the `101`, the TCP connection stays open and either side can send at any time. Data travels
+in frames. Each frame starts with a small header: a FIN bit, a 4-bit opcode (`0x1` text,
+`0x2` binary, `0x8` close, `0x9` ping, `0xA` pong), a mask bit, and the payload length. Lengths up
+to 125 fit in the first 7 bits. 126 means a 16-bit length follows, and 127 means a 64-bit one.
+
+Frames from the browser must be masked with a 4-byte key, and frames from the server must not be.
+A telemetry message here is about 89 bytes of JSON, so the server's frame header is only 2 bytes.
+A polled HTTP response would repeat its full set of headers every second instead.
+
+### Serving a website from flash
+
+A web server on a microcontroller doesn't need a filesystem. ESP-IDF's build system can link any
+file straight into the firmware with `EMBED_FILES` [@idf_build]. Each file becomes a pair of
+linker symbols, and C code can treat the bytes in between as a constant array:
+
+```c
+extern const uint8_t app_js_gz[]     asm("_binary_app_js_gz_start");
+extern const uint8_t app_js_gz_end[] asm("_binary_app_js_gz_end");
+// length = app_js_gz_end - app_js_gz
+```
+
+The other trick is compression. If the server sends gzipped bytes with the header
+`Content-Encoding: gzip`, the browser decompresses them itself. So the chip never runs gzip. It
+just stores the compressed files and sends them as they are.
+
+### WS2812 LEDs and the RMT peripheral
+
+The RGB LED on most S3 dev boards is a WS2812, an LED with a tiny controller built in. It takes
+data on a single wire, with no clock line, so every bit is encoded as a pulse width
+[@ws2812_datasheet]:
+
+- each bit lasts about 1.25 µs (800 kbit/s)
+- a `0` is a short high pulse (about 0.35 µs) followed by a long low
+- a `1` is a long high pulse (about 0.7 µs) followed by a short low
+- 24 bits per LED, in G, R, B order, most significant bit first
+- holding the line low for more than 50 µs latches the colour
+
+These timings come from the WS2812 datasheet. WS2812B parts are close, but check the sheet for
+yours if you write your own driver.
+
+One LED takes $24 \times 1.25\,\mu\text{s} = 30\,\mu\text{s}$ of data. Those sub-microsecond
+pulses are hard to get right by toggling a GPIO in software while Wi-Fi interrupts are firing.
+The S3's RMT (Remote Control Transceiver)
+peripheral was designed for infrared remotes, but it can play back any list of "level for this
+long" pairs from hardware [@idf_rmt]. With a 10 MHz RMT clock, one tick is 0.1 µs, so a bit
+period is 12.5 ticks and a short pulse is 3 or 4. The `led_strip` component turns colours into
+those symbols for you.
+
+### The temperature sensor isn't measuring the room
+
+The S3 has a built-in temperature sensor, but it measures the silicon die, not the air
+[@idf_tsens]. It runs warmer than the room and rises when the CPU or radio works harder. It's
+good for spotting trends, not for a weather station. The dashboard shows it anyway.
+
+## Part 2: the project
+
+### The shape of it
+
+```text
+              Wi-Fi (station)
+browser  <------------------------>  ESP32-S3
+  |                                     |
+  |  GET /, /assets/app.js, app.css     |  gzipped files linked into the firmware
+  |  GET /ws  -> 101 Switching          |
+  |  <- telemetry JSON, 1 per second    |  app_main loop
+  |  -> {"cmd": "ping" | "scan" | "led"}|  WebSocket handler on the httpd task
+```
+
+The repo has two folders:
+
+```text
+firmware/   ESP-IDF app in C (Wi-Fi, HTTP server, WebSocket, telemetry)
+frontend/   React + Vite; the gzipped build is embedded in the firmware
+```
+
+The dashboard shows die temperature, free heap with a memory bar, uptime and Wi-Fi RSSI, each
+with a sparkline of the last 60 samples. Below those are a ping button with round-trip time, a
+Wi-Fi scan table and a colour picker for the onboard LED. The LED itself shows status: red with
+no Wi-Fi, green once connected, and a short blue flash each time telemetry goes out.
+
+### Baking the frontend into the firmware
+
+Vite normally gives built files hashed names like `index-a1b2c3.js`, so the browser can cache them
+forever. That doesn't work here, because the firmware has to know each file's name at compile
+time. So the Vite config pins the names:
+
+```js
+build: {
+  rolldownOptions: {
+    output: { entryFileNames: 'assets/app.js', assetFileNames: 'assets/app[extname]' },
+  },
+},
+```
+
+and the build script gzips the output at the highest level:
+
+```json
+"build": "vite build && gzip -9knf dist/index.html dist/assets/app.js dist/assets/app.css"
+```
+
+The firmware's `CMakeLists.txt` then embeds the three `.gz` files. Since the names never change,
+the server sends `Cache-Control: no-cache` so the browser revalidates instead of keeping an old
+build after a reflash. The whole dashboard comes to about 71 KB gzipped, and there's no SPIFFS or
+LittleFS partition or mount code to maintain.
+
+One table serves all three files with a single handler:
+
+```c
+static const asset_t assets[] = {
+    {"/", "text/html", index_html_gz, index_html_gz_end},
+    {"/assets/app.js", "text/javascript", app_js_gz, app_js_gz_end},
+    {"/assets/app.css", "text/css", app_css_gz, app_css_gz_end},
+};
+
+static esp_err_t asset_handler(httpd_req_t *req)
+{
+    const asset_t *a = req->user_ctx;
+    httpd_resp_set_type(req, a->type);
+    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    return httpd_resp_send(req, (const char *)a->start, a->end - a->start);
+}
+```
+
+The trade-off is that any frontend change needs `npm run build` and a reflash. For development
+there's a shortcut: `npm run dev` on my laptop with `?ip=<ESP_IP>` in the URL, and the hot-reloading
+page talks to the real board.
+
+### Boot order
+
+`app_main` brings things up in this order:
+
+1. NVS. The Wi-Fi driver stores its RF calibration data in non-volatile storage, so NVS has to be
+   ready first. If the partition is full or from an older version, it's erased and initialised
+   again.
+2. The LED, set to red, so the board shows it's alive but offline before anything else can fail.
+3. Wi-Fi in station mode, with the SSID and password from `menuconfig`.
+4. The HTTP server, with the WebSocket endpoint and the three file routes.
+5. The temperature sensor, installed for a −10 to 80 °C range.
+
+Then the main loop runs forever.
+
+### The telemetry loop
+
+Once a second, `app_main` builds a JSON string and sends it to every connected WebSocket client:
+
+```json
+{"temp":38.5,"heap":245120,"heap_min":230000,"heap_total":330000,"uptime":120,"rssi":-52}
+```
+
+- `heap` is free heap right now, and `heap_min` is the lowest it has ever been since boot. The low
+  watermark is the more useful number for spotting a leak or a close call.
+- `heap_total` is the size of the default heap, which is less than the 512 KB of SRAM because
+  static data and code that has to run from internal RAM take their share first.
+- `rssi` is `null` while the board isn't associated, so the dashboard can show "No signal"
+  instead of a stale number.
+
+This message is built with `snprintf` into a 192-byte buffer on the stack rather than with
+cJSON. Its shape never changes, so there's no need to allocate on every tick.
+
+Broadcasting means asking the HTTP server for its list of open sockets and sending to the ones
+that completed the WebSocket handshake:
+
+```c
+static int ws_broadcast(const char *msg)
+{
+    size_t n = CONFIG_LWIP_MAX_SOCKETS;
+    int fds[CONFIG_LWIP_MAX_SOCKETS];
+    if (httpd_get_client_list(server, &n, fds) != ESP_OK) {
+        return 0;
+    }
+    int sent = 0;
+    httpd_ws_frame_t frame = {.type = HTTPD_WS_TYPE_TEXT, .payload = (uint8_t *)msg, .len = strlen(msg)};
+    for (size_t i = 0; i < n; i++) {
+        if (httpd_ws_get_fd_info(server, fds[i]) == HTTPD_WS_CLIENT_WEBSOCKET) {
+            sent += httpd_ws_send_data(server, fds[i], &frame) == ESP_OK;
+        }
+    }
+    return sent;
+}
+```
+
+It returns how many clients got the message, which drives the blue flash: if nobody is listening,
+the LED stays solid green. I also turned on `lru_purge_enable`, so when the server runs out of
+sockets it closes the least recently used connection instead of turning a new browser tab away
+[@idf_httpd].
+
+### Commands from the browser
+
+Incoming frames land in the WebSocket handler on the HTTP server's task. It first reads only the
+length, and closes the socket if the frame won't fit in a 128-byte buffer, before reading any
+payload. A client can't make the board read an arbitrarily large message. Then cJSON parses the
+command.
+
+| Send | Reply |
+| :-- | :-- |
+| `{"cmd":"ping","t":123}` | `{"type":"pong","t":123}` |
+| `{"cmd":"scan"}` | `{"type":"scan","aps":[...]}`, sent to every client when the scan finishes |
+| `{"cmd":"led","rgb":"#ff8800"}` | sets the LED; `"rgb":null` hands it back to the status colours |
+| anything else | `{"type":"error","msg":"..."}` |
+
+Ping is the simplest way to measure latency. The browser puts `performance.now()` in `t`, the
+board echoes it back untouched, and the browser subtracts. The board never needs a clock that
+matches the browser's.
+
+Manual LED colours are divided by 4 before they reach the LED, because `#ffffff` at full
+brightness is blinding. The status colours use 20 out of 255 for the same reason.
+
+You don't need the dashboard to see the stream. Node 24 has `WebSocket` built in:
+
+```sh
+node -e 'new WebSocket("ws://<ESP_IP>/ws").onmessage = e => console.log(e.data)'
+```
+
+### The frontend's job: notice when the board is gone
+
+Most of `App.jsx` is ordinary React: cards, sparklines drawn as SVG polylines, and a table. The
+interesting part is the `useTelemetry` hook, which has to answer "is the board still there?"
+
+You'd expect the WebSocket's `close` event to handle that. It does when the board reboots
+cleanly. But if you pull the USB cable, no TCP close packet is ever sent, and the browser can sit
+on a dead connection for a long time. So the hook runs its own watchdog: every message resets a
+6-second timer, and if the timer fires, it drops the socket, marks the status `offline` and tries
+again every 2 seconds.
+
+```js
+const kick = () => { clearTimeout(watchdog); watchdog = setTimeout(drop, STALE_MS) }
+```
+
+Six seconds isn't arbitrary. It has to be longer than a Wi-Fi scan, as the next section explains.
+
+When the page is served from the board, it connects back to `location.host`, so there's nothing
+to configure. The IP box is for the dev-server case.
+
+### Problems I ran into
+
+**Which task sends the scan results.** `httpd_ws_send_data` hands its work to the HTTP server's
+task and waits for it to finish. If you call it *from* that task, it waits for itself forever.
+So the WebSocket handler only starts a non-blocking scan and returns. The results go out from the
+`WIFI_EVENT_SCAN_DONE` handler, which runs on the event task, and every open dashboard gets them,
+not just the one that asked.
+
+**A stack overflow in the event task.** Twenty access-point records take about 2 KB. With the
+event task's default stack of about 2.3 KB, the board crashed. The records now go on the heap
+with `calloc`, and `sdkconfig.defaults` raises the event task stack to 4 KB.
+
+**Two scans at once.** Starting a second scan while one is running cancels the first, and the
+first then reports zero networks. A `scanning` flag ignores the second request. Nothing is lost,
+because the results go to every client anyway.
+
+**Telemetry pausing during scans.** While scanning, the radio leaves its channel to listen on the
+others for about 3 seconds, so telemetry stops. That's expected, and it's why the dashboard's
+watchdog waits 6 seconds rather than 2.
+
+**One LED, two tasks.** The main loop paints status colours and the HTTP task paints manual
+colours, so `led_set` takes a mutex to keep the two from writing to the LED at the same time.
+
+**Wi-Fi reason codes.** These are the ones worth knowing:
+
+| Reason | Meaning |
+| :-- | :-- |
+| 201 | SSID not found |
+| 15, 204 | handshake failed, usually a wrong password |
+
+If you're joining an iPhone hotspot and keep getting 201, look at the apostrophe. iPhone hotspot
+names use a curly one (`’`), and typing a straight one (`'`) into `menuconfig` gives the board a
+different SSID.
+
+**A dark LED.** The onboard LED is on GPIO 48 on most DevKitC-1 boards, but some
+v1.1 boards use GPIO 38. It's a `menuconfig` option now. Check the silkscreen next to the LED.
+
+<Note title="Shortcuts I kept on purpose">
+
+Wi-Fi retries forever with no backoff, and there's no fallback access point if the credentials
+are wrong. The LED status can lag Wi-Fi by up to a second because it's only repainted in the main
+loop. An SSID with invalid UTF-8 would break the browser's JSON parse. I've marked each of these
+in the code with its limit and the fix.
+
+</Note>
+
+## Building it yourself
+
+You need an ESP32-S3 board with 16 MB flash, ESP-IDF 5.x and Node. Build the frontend first,
+because the firmware embeds its output and won't compile without it:
+
+```sh
+cd frontend
+npm install
+npm run build
+
+cd ../firmware
+. $HOME/esp/esp-idf/export.sh
+idf.py menuconfig                       # Dashboard Wi-Fi: SSID, password, LED GPIO
+idf.py -p /dev/ttyACM0 flash monitor    # Ctrl+] exits the monitor
+```
+
+The monitor prints `Got IP: 192.168.x.x`. Open that address in a browser on the same network. If
+the serial port says permission denied on Linux, add yourself to the `dialout` group and log in
+again.
