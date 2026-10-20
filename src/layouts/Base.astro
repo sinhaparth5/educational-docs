@@ -1,0 +1,25 @@
+---
+import 'katex/dist/katex.min.css';
+
+const { title = 'Educational Docs' } = Astro.props.frontmatter ?? Astro.props;
+const slug = Astro.url.pathname.replace(/^\/|\/$/g, '') || 'index';
+const ogImage = new URL(`/og/${slug}.png`, Astro.site);
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="icon" href="/favicon.ico" />
+		<meta name="viewport" content="width=device-width" />
+		<meta name="generator" content={Astro.generator} />
+		<title>{title}</title>
+		<link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+		<meta property="og:title" content={title} />
+		<meta property="og:image" content={ogImage} />
+		<meta name="twitter:card" content="summary_large_image" />
+	</head>
+	<body>
+		<slot />
+	</body>
+</html>
