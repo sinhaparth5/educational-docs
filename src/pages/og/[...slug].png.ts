@@ -5,14 +5,14 @@ import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import { SITE, getPosts } from '@/lib/site';
 
-// og/index.png for the site, og/posts/<id>.png per post
-export const getStaticPaths = (async () => [
-	{ params: { slug: 'index' }, props: { title: SITE.title } },
-	...(await getPosts()).map((post) => ({
-		params: { slug: `posts/${post.id}` },
-		props: { title: post.data.title },
-	})),
-]) satisfies GetStaticPaths;
+// og/posts/<id>.png for posts without a cover; the site itself uses public/og-home.jpg
+export const getStaticPaths = (async () =>
+	(await getPosts())
+		.filter((post) => !post.data.cover) // those use their cover image
+		.map((post) => ({
+			params: { slug: `posts/${post.id}` },
+			props: { title: post.data.title },
+		}))) satisfies GetStaticPaths;
 
 // KaTeX ships TTFs; satori can't read woff2, so reuse this one
 const font = await readFile('node_modules/katex/dist/fonts/KaTeX_Main-Regular.ttf');

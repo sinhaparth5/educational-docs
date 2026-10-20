@@ -1,4 +1,5 @@
 ---
+import { Image } from 'astro:assets';
 import PostDate from '@/components/posts/post-date/PostDate.astro';
 import { readingTime, type Post } from '@/lib/site';
 import styles from './PostItem.module.css';
@@ -7,12 +8,20 @@ interface Props {
 	post: Post;
 	// h3 when the list sits under its own h2 (e.g. "Featured" on the home page)
 	heading?: 'h2' | 'h3';
+	// Show the post's cover image above the title, if it has one
+	showCover?: boolean;
 }
 
-const { post, heading: Heading = 'h2' } = Astro.props;
+const { post, heading: Heading = 'h2', showCover = false } = Astro.props;
+const { cover, coverAlt } = post.data;
 ---
 
 <li class={styles.item}>
+	{
+		showCover && cover && (
+			<Image src={cover} alt={coverAlt} width={720} class={styles.cover} />
+		)
+	}
 	<a href={`/posts/${post.id}/`} class={styles.link}>
 		<Heading class={styles.title}>
 			{post.data.title}

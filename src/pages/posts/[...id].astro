@@ -1,5 +1,6 @@
 ---
 import { render } from 'astro:content';
+import { getImage } from 'astro:assets';
 import Base from '@/layouts/Base.astro';
 import PostDate from '@/components/posts/post-date/PostDate.astro';
 import Toc from '@/components/posts/toc/Toc.astro';
@@ -34,9 +35,11 @@ export async function getStaticPaths() {
 
 const { post, newer, older, related, parts } = Astro.props;
 const { Content, headings } = await render(post);
-const { title, description, date, updated, tags, draft } = post.data;
+const { title, description, date, updated, tags, draft, cover } = post.data;
 const url = new URL(Astro.url.pathname, Astro.site).href;
-const ogImage = `/og/posts/${post.id}.png`;
+const ogImage = cover
+	? (await getImage({ src: cover, width: 1200, height: 630, fit: 'cover', format: 'jpg' })).src
+	: `/og/posts/${post.id}.png`;
 
 // Structured data so search engines can show author, dates and image
 const jsonLd = {
