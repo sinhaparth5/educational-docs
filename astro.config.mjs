@@ -3,9 +3,11 @@ import { defineConfig } from 'astro/config';
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 import react from '@astrojs/react';
-import { unified } from '@astrojs/markdown-remark';
+import { unified, rehypeHeadingIds } from '@astrojs/markdown-remark';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import rehypeAutolinkHeadings from 'rehype-autolink-headings';
+import * as pagefind from 'pagefind';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { gzipSync, brotliCompressSync, constants } from 'node:zlib';
@@ -40,6 +42,27 @@ function precompress() {
 	};
 }
 
+/**
+ * Builds the Pagefind search index into dist/pagefind after the site is built.
+ * Only elements marked data-pagefind-body (post articles) are indexed.
+ * @returns {import('astro').AstroIntegration}
+ */
+function search() {
+	return {
+		name: 'pagefind',
+		hooks: {
+			'astro:build:done': async ({ dir, logger }) => {
+				const { index } = await pagefind.createIndex({});
+				if (!index) throw new Error('pagefind: could not create index');
+				const { page_count } = await index.addDirectory({ path: fileURLToPath(dir) });
+				await index.writeFiles({ outputPath: fileURLToPath(new URL('pagefind', dir)) });
+				await pagefind.close();
+				logger.info(`indexed ${page_count} pages`);
+			},
+		},
+	};
+}
+
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://edu.parthsinha.com',
@@ -49,12 +72,30 @@ export default defineConfig({
 		sitemap({
 			filter: (page) => !page.includes('/drafts/'),
 		}),
+		search(), // before precompress so its files get compressed too
 		precompress(),
 	],
+	// Post images get a srcset and WebP output at build time; never wider than the column
+	image: { layout: 'constrained' },
 	markdown: {
 		processor: unified({
 			remarkPlugins: [remarkMath],
-			rehypePlugins: [rehypeKatex],
+			rehypePlugins: [
+				rehypeKatex,
+				rehypeHeadingIds, // ids must exist before autolink runs
+				[
+					rehypeAutolinkHeadings,
+					{
+						behavior: 'append',
+						properties: {
+							className: ['anchor'],
+							ariaLabel: 'Link to this section',
+							dataPagefindIgnore: 'all', // keep the '#' out of search results
+						},
+						content: { type: 'text', value: '#' },
+					},
+				],
+			],
 		}),
 		shikiConfig: {
 			themes: { light: 'github-light', dark: 'github-dark-dimmed' },

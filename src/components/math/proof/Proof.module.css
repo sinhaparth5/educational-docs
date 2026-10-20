@@ -1,0 +1,25 @@
+.proof {
+	margin: 1rem 0 1.5rem;
+	padding-left: 1rem;
+	border-left: 1px solid var(--border);
+}
+
+.head {
+	margin: 0;
+	color: var(--fg-strong);
+}
+
+.body > :global(:first-child) {
+	margin-top: 0.25rem;
+}
+.body > :global(:last-child) {
+	margin-bottom: 0;
+}
+
+/* QED tombstone, right-aligned after the last line */
+.body::after {
+	content: '∎';
+	display: block;
+	text-align: right;
+	color: var(--fg-strong);
+}

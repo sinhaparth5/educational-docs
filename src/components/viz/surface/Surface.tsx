@@ -1,49 +1,114 @@
 import { useEffect, useRef } from 'react';
-import 'mathbox/mathbox.css';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { palette, useTheme } from '@/lib/theme';
+import viz from '../viz.module.css';
 import styles from './Surface.module.css';
 
-// Animated surface z = sin(x)·cos(y + t); drag to orbit
+type Colors = (typeof palette)['light'];
+
+// Animated surface y = ½·sin(x)·cos(z + t) over [-3, 3]²; drag to orbit
 export default function Surface() {
 	const host = useRef<HTMLDivElement>(null);
+	const theme = useTheme();
+	// Set by the scene effect, called on theme change so the scene isn't rebuilt
+	const recolor = useRef<(c: Colors) => void>(null);
 
 	useEffect(() => {
-		let mb: any;
-		// Imported here, not at the top: threestrap can't load in Node during prerender
-		Promise.all([import('mathbox'), import('three/examples/jsm/controls/OrbitControls.js')]).then(
-			([{ mathBox }, { OrbitControls }]) => {
-				mb = mathBox({
-					element: host.current!,
-					plugins: ['core', 'controls', 'cursor'],
-					controls: { klass: OrbitControls },
-				});
-				mb.three.camera.position.set(2.5, 1.5, 2.5);
-				mb.three.renderer.setClearColor(0x22272e, 1);
+		const el = host.current!;
+		const renderer = new THREE.WebGLRenderer({ antialias: true });
+		renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+		el.append(renderer.domElement);
 
-				const view = mb.cartesian({
-					range: [
-						[-3, 3],
-						[-1, 1],
-						[-3, 3],
-					],
-					scale: [1, 0.5, 1],
-				});
-				view.axis({ axis: 1 });
-				view.axis({ axis: 3 });
-				view.grid({ axes: [1, 3] });
-				view
-					.area({
-						width: 48,
-						height: 48,
-						axes: [1, 3],
-						channels: 3,
-						expr: (emit: Function, x: number, y: number, _i: number, _j: number, t: number) =>
-							emit(x, Math.sin(x) * Math.cos(y + t), y),
-					})
-					.surface({ color: '#3090ff', shaded: true });
-			},
+		const scene = new THREE.Scene();
+		const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+		camera.position.set(6, 4.5, 6);
+		const controls = new OrbitControls(camera, renderer.domElement);
+		controls.enableDamping = true;
+		controls.enableZoom = false; // let the page scroll over the canvas
+
+		scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+		const sun = new THREE.DirectionalLight(0xffffff, 2);
+		sun.position.set(3, 6, 2);
+		scene.add(sun);
+
+		// 48×48 grid in the xz-plane; heights are rewritten every frame
+		const geometry = new THREE.PlaneGeometry(6, 6, 48, 48).rotateX(-Math.PI / 2);
+		const material = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.6 });
+		scene.add(new THREE.Mesh(geometry, material));
+		const position = geometry.attributes.position;
+
+		const axesMaterial = new THREE.LineBasicMaterial();
+		const axesGeometry = new THREE.BufferGeometry().setFromPoints([
+			new THREE.Vector3(-3.5, 0, 0),
+			new THREE.Vector3(3.5, 0, 0),
+			new THREE.Vector3(0, 0, -3.5),
+			new THREE.Vector3(0, 0, 3.5),
+		]);
+		scene.add(new THREE.LineSegments(axesGeometry, axesMaterial));
+		let grid: THREE.GridHelper | undefined;
+
+		recolor.current = (c) => {
+			renderer.setClearColor(c.bg);
+			material.color.set(c.accent);
+			axesMaterial.color.set(c.fg);
+			if (grid) {
+				scene.remove(grid);
+				grid.dispose();
+			}
+			grid = new THREE.GridHelper(6, 12, c.grid, c.grid);
+			grid.position.y = -0.6;
+			scene.add(grid);
+		};
+
+		const resize = () => {
+			const { clientWidth: w, clientHeight: h } = el;
+			renderer.setSize(w, h);
+			camera.aspect = w / h;
+			camera.updateProjectionMatrix();
+		};
+		const resizer = new ResizeObserver(resize);
+		resizer.observe(el);
+
+		const timer = new THREE.Timer();
+		const frame = () => {
+			timer.update();
+			const t = timer.getElapsed();
+			for (let i = 0; i < position.count; i++) {
+				const x = position.getX(i);
+				const z = position.getZ(i);
+				position.setY(i, 0.5 * Math.sin(x) * Math.cos(z + t));
+			}
+			position.needsUpdate = true;
+			geometry.computeVertexNormals();
+			controls.update();
+			renderer.render(scene, camera);
+		};
+
+		// Only animate while on screen
+		const visibility = new IntersectionObserver(([entry]) =>
+			renderer.setAnimationLoop(entry.isIntersecting ? frame : null),
 		);
-		return () => mb?.three.destroy();
+		visibility.observe(el);
+
+		return () => {
+			visibility.disconnect();
+			resizer.disconnect();
+			renderer.setAnimationLoop(null);
+			controls.dispose();
+			grid?.dispose();
+			geometry.dispose();
+			material.dispose();
+			axesGeometry.dispose();
+			axesMaterial.dispose();
+			renderer.dispose();
+			renderer.domElement.remove();
+			recolor.current = null;
+		};
 	}, []);
 
-	return <div ref={host} className={styles.canvas} />;
+	// Runs after the scene effect on mount, then on every theme switch
+	useEffect(() => recolor.current?.(palette[theme]), [theme]);
+
+	return <div ref={host} className={`${viz.frame} ${styles.canvas}`} />;
 }

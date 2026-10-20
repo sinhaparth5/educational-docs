@@ -6,6 +6,7 @@ const section = Astro.url.pathname.split('/')[1];
 const links = [
 	{ href: '/posts/', label: 'Posts', key: 'posts' },
 	{ href: '/tags/', label: 'Tags', key: 'tags' },
+	{ href: '/about/', label: 'About', key: 'about' },
 ];
 ---
 
@@ -24,6 +25,17 @@ const links = [
 					</a>
 				))
 			}
+			<a
+				href="/search/"
+				class:list={[styles.toggle, { [styles.active]: section === 'search' }]}
+				aria-label="Search"
+				title="Search"
+			>
+				<svg class={styles.icon} viewBox="0 0 24 24" aria-hidden="true">
+					<circle cx="11" cy="11" r="7"></circle>
+					<path d="m20 20-4-4"></path>
+				</svg>
+			</a>
 			<button id="theme-toggle" class={styles.toggle} aria-label="Toggle dark mode" title="Toggle dark mode">
 				<svg class:list={[styles.icon, styles.moon]} viewBox="0 0 24 24" aria-hidden="true">
 					<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>

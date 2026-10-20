@@ -1,0 +1,16 @@
+---
+import styles from './Note.module.css';
+
+interface Props {
+	type?: 'note' | 'tip' | 'warning';
+	title?: string;
+}
+
+const { type = 'note', title } = Astro.props;
+const label = title ?? type[0].toUpperCase() + type.slice(1);
+---
+
+<aside class:list={[styles.note, styles[type]]}>
+	<p class={styles.head}>{label}</p>
+	<div class={styles.body}><slot /></div>
+</aside>

@@ -123,6 +123,24 @@ a {
 	overflow-y: hidden;
 }
 
+/* Heading anchors from rehype-autolink-headings, shown on hover */
+.prose .anchor {
+	margin-left: 0.4rem;
+	color: var(--muted);
+	text-decoration: none;
+	opacity: 0;
+	transition: opacity 0.2s;
+}
+.prose :is(h2, h3, h4):hover .anchor,
+.prose .anchor:focus-visible {
+	opacity: 1;
+}
+@media (hover: none) {
+	.prose .anchor {
+		opacity: 1;
+	}
+}
+
 /* Shiki dual theme: light colors are inline, swap to dark vars */
 [data-theme='dark'] .astro-code,
 [data-theme='dark'] .astro-code span {

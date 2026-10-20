@@ -1,0 +1,8 @@
+/* Shared frame for canvas-based islands */
+.frame {
+	position: relative;
+	width: 100%;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	overflow: hidden;
+}

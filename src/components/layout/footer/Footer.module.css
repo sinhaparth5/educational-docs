@@ -16,3 +16,8 @@
 .link:hover {
 	color: var(--fg-strong);
 }
+
+.links {
+	display: flex;
+	gap: 1rem;
+}

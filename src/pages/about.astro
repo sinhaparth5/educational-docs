@@ -1,0 +1,19 @@
+---
+import Base from '@/layouts/Base.astro';
+import styles from '@/styles/pages/listing.module.css';
+---
+
+<Base title="About" description="About this site.">
+	<h1 class={styles.heading}>About</h1>
+	<!-- TODO: write your own -->
+	<div class="prose">
+		<p>
+			This site is a collection of interactive notes on mathematics and computing. Each post mixes
+			prose and equations with small visualizations you can play with.
+		</p>
+		<p>
+			Built with <a href="https://astro.build">Astro</a>. Math is typeset with
+			<a href="https://katex.org">KaTeX</a> at build time.
+		</p>
+	</div>
+</Base>

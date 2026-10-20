@@ -1,0 +1,23 @@
+---
+import Base from '@/layouts/Base.astro';
+import listing from '@/styles/pages/listing.module.css';
+import styles from '@/styles/pages/search.module.css';
+---
+
+<Base title="Search" description="Search posts.">
+	<h1 class={listing.heading}>Search</h1>
+	<p class={listing.sub}>Search through all the posts.</p>
+	<div id="search" class={styles.search}>
+		<noscript>Search needs JavaScript.</noscript>
+	</div>
+	<link href="/pagefind/pagefind-ui.css" rel="stylesheet" />
+	<script is:inline src="/pagefind/pagefind-ui.js"></script>
+	<script is:inline>
+		// The index only exists after `astro build`, so this is empty under `astro dev`
+		if (window.PagefindUI) {
+			new PagefindUI({ element: '#search', showImages: false, showSubResults: true, autofocus: true });
+		} else {
+			document.getElementById('search').textContent = 'Search works after `bun run build` (try `bun run preview`).';
+		}
+	</script>
+</Base>

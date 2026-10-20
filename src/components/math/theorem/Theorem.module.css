@@ -1,0 +1,27 @@
+.box {
+	margin: 1.5rem 0;
+	padding: 0.75rem 1rem;
+	border-left: 3px solid var(--accent);
+	background: var(--hover);
+	border-radius: 0 6px 6px 0;
+}
+
+.definition {
+	border-left-style: dashed;
+}
+
+.head {
+	margin: 0;
+	color: var(--fg-strong);
+}
+
+.title {
+	font-weight: 400;
+}
+
+.body > :global(:first-child) {
+	margin-top: 0.25rem;
+}
+.body > :global(:last-child) {
+	margin-bottom: 0;
+}

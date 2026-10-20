@@ -1,0 +1,28 @@
+.note {
+	--c: var(--accent);
+	margin: 1.5rem 0;
+	padding: 0.75rem 1rem;
+	border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--c) 6%, transparent);
+}
+.tip {
+	--c: #16a34a;
+}
+.warning {
+	--c: #d97706;
+}
+
+.head {
+	margin: 0;
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: var(--c);
+}
+
+.body > :global(:first-child) {
+	margin-top: 0.25rem;
+}
+.body > :global(:last-child) {
+	margin-bottom: 0;
+}

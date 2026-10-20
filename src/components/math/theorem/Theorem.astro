@@ -1,0 +1,17 @@
+---
+import styles from './Theorem.module.css';
+
+interface Props {
+	kind?: 'Theorem' | 'Lemma' | 'Corollary' | 'Proposition' | 'Definition';
+	title?: string;
+}
+
+const { kind = 'Theorem', title } = Astro.props;
+---
+
+<div class:list={[styles.box, { [styles.definition]: kind === 'Definition' }]}>
+	<p class={styles.head}>
+		<strong>{kind}</strong>{title && <span class={styles.title}> ({title})</span>}.
+	</p>
+	<div class={styles.body}><slot /></div>
+</div>

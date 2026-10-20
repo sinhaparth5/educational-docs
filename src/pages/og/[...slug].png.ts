@@ -1,5 +1,6 @@
 import type { APIRoute, GetStaticPaths } from 'astro';
 import { readFile } from 'node:fs/promises';
+import { createElement as h } from 'react';
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import { SITE, getPosts } from '@/lib/site';
@@ -18,9 +19,9 @@ const font = await readFile('node_modules/katex/dist/fonts/KaTeX_Main-Regular.tt
 
 export const GET: APIRoute = async ({ props }) => {
 	const svg = await satori(
-		{
-			type: 'div',
-			props: {
+		h(
+			'div',
+			{
 				style: {
 					width: '100%',
 					height: '100%',
@@ -31,12 +32,10 @@ export const GET: APIRoute = async ({ props }) => {
 					background: '#171717',
 					color: '#fff',
 				},
-				children: [
-					{ type: 'div', props: { style: { fontSize: 72 }, children: props.title } },
-					{ type: 'div', props: { style: { fontSize: 32, color: '#ff6b01' }, children: SITE.title } },
-				],
 			},
-		},
+			h('div', { style: { fontSize: 72 } }, props.title),
+			h('div', { style: { fontSize: 32, color: '#ff6b01' } }, SITE.title),
+		),
 		{ width: 1200, height: 630, fonts: [{ name: 'Main', data: font }] },
 	);
 	const png = new Resvg(svg).render().asPng();

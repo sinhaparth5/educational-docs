@@ -28,6 +28,7 @@ const fullTitle = title ? `${title} | ${SITE.title}` : SITE.title;
 		<meta name="description" content={description} />
 		<link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
 		<link rel="sitemap" href="/sitemap-index.xml" />
+		<link rel="alternate" type="application/rss+xml" title={SITE.title} href="/rss.xml" />
 		<meta property="og:title" content={fullTitle} />
 		<meta property="og:description" content={description} />
 		<meta property="og:image" content={new URL(ogImage, Astro.site)} />

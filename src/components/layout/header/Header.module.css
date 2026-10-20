@@ -64,7 +64,8 @@
 	stroke-linecap: round;
 	transition: transform 0.3s, opacity 0.3s;
 }
-.toggle:hover .icon {
+.toggle:hover .icon,
+.toggle.active .icon {
 	stroke: var(--accent);
 }
 

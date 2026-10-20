@@ -1,5 +1,7 @@
-.board {
-	width: 100%;
+/* :global(.jxgbox) adds specificity to beat jsxgraph.css's white box and blue border */
+:global(.jxgbox).board {
 	max-width: 400px;
 	aspect-ratio: 1;
+	background-color: var(--bg);
+	border-color: var(--border);
 }

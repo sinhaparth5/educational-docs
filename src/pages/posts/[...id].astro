@@ -1,6 +1,10 @@
 ---
 import { render } from 'astro:content';
 import Base from '@/layouts/Base.astro';
+import CopyCode from '@/components/posts/copy-code/CopyCode.astro';
+import Theorem from '@/components/math/theorem/Theorem.astro';
+import Proof from '@/components/math/proof/Proof.astro';
+import Note from '@/components/math/note/Note.astro';
 import { formatDate, getPosts } from '@/lib/site';
 import styles from '@/styles/pages/post.module.css';
 
@@ -19,32 +23,35 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
 ---
 
 <Base title={post.data.title} description={post.data.description} ogImage={`/og/posts/${post.id}.png`}>
-	<a href="/posts/" class={styles.back}>← Back to posts</a>
+	<div data-pagefind-body>
+		<a href="/posts/" class={styles.back} data-pagefind-ignore>← Back to posts</a>
 
-	<h1 class={styles.title}>{post.data.title}</h1>
-	<div class={styles.meta}>
-		<time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
-		{post.data.tags.map((tag) => <a href={`/tags/${tag}/`} class={styles.tag}>#{tag}</a>)}
+		<h1 class={styles.title}>{post.data.title}</h1>
+		<div class={styles.meta}>
+			<time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
+			{post.data.tags.map((tag) => <a href={`/tags/${tag}/`} class={styles.tag}>#{tag}</a>)}
+		</div>
+
+		{
+			toc.length > 0 && (
+				<details open class={styles.toc} data-pagefind-ignore>
+					<summary class={styles.summary}>Table of contents</summary>
+					<ul class={styles.tocList}>
+						{toc.map((h) => (
+							<li class:list={[styles.tocItem, { [styles.sub]: h.depth === 3 }]}>
+								<a href={`#${h.slug}`} class={styles.tocLink}>{h.text}</a>
+							</li>
+						))}
+					</ul>
+				</details>
+			)
+		}
+
+		<article class="prose">
+			<Content components={{ Theorem, Proof, Note }} />
+		</article>
 	</div>
-
-	{
-		toc.length > 0 && (
-			<details open class={styles.toc}>
-				<summary class={styles.summary}>Table of contents</summary>
-				<ul class={styles.tocList}>
-					{toc.map((h) => (
-						<li class:list={[styles.tocItem, { [styles.sub]: h.depth === 3 }]}>
-							<a href={`#${h.slug}`} class={styles.tocLink}>{h.text}</a>
-						</li>
-					))}
-				</ul>
-			</details>
-		)
-	}
-
-	<article class="prose">
-		<Content />
-	</article>
+	<CopyCode />
 
 	<nav class={styles.pager}>
 		{

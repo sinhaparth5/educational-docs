@@ -1,0 +1,24 @@
+---
+// Adds a copy button to every code block in the post. No markup of its own.
+---
+
+<script>
+	import styles from './CopyCode.module.css';
+
+	for (const pre of document.querySelectorAll<HTMLPreElement>('.prose pre')) {
+		const button = document.createElement('button');
+		button.className = styles.button;
+		button.type = 'button';
+		button.textContent = 'Copy';
+		button.addEventListener('click', async () => {
+			await navigator.clipboard.writeText(pre.querySelector('code')?.innerText ?? '');
+			button.textContent = 'Copied';
+			setTimeout(() => (button.textContent = 'Copy'), 1500);
+		});
+		// Wrap so the button stays put while a long line scrolls sideways
+		const wrap = document.createElement('div');
+		wrap.className = styles.wrap;
+		pre.replaceWith(wrap);
+		wrap.append(pre, button);
+	}
+</script>
