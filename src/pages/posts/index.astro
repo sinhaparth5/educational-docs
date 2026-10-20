@@ -1,0 +1,14 @@
+---
+import Base from '@/layouts/Base.astro';
+import PostItem from '@/components/posts/post-item/PostItem.astro';
+import { getPosts } from '@/lib/site';
+import styles from '@/styles/pages/listing.module.css';
+
+const posts = await getPosts();
+---
+
+<Base title="Posts" description="All posts.">
+	<h1 class={styles.heading}>Posts</h1>
+	<p class={styles.sub}>All the articles I've posted.</p>
+	<ul class={styles.list}>{posts.map((post) => <PostItem post={post} />)}</ul>
+</Base>

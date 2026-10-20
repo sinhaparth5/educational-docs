@@ -1,0 +1,69 @@
+---
+import { render } from 'astro:content';
+import Base from '@/layouts/Base.astro';
+import { formatDate, getPosts } from '@/lib/site';
+import styles from '@/styles/pages/post.module.css';
+
+export async function getStaticPaths() {
+	const posts = await getPosts();
+	// posts are newest first, so "next" (newer) is i - 1
+	return posts.map((post, i) => ({
+		params: { id: post.id },
+		props: { post, newer: posts[i - 1], older: posts[i + 1] },
+	}));
+}
+
+const { post, newer, older } = Astro.props;
+const { Content, headings } = await render(post);
+const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
+---
+
+<Base title={post.data.title} description={post.data.description} ogImage={`/og/posts/${post.id}.png`}>
+	<a href="/posts/" class={styles.back}>← Back to posts</a>
+
+	<h1 class={styles.title}>{post.data.title}</h1>
+	<div class={styles.meta}>
+		<time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
+		{post.data.tags.map((tag) => <a href={`/tags/${tag}/`} class={styles.tag}>#{tag}</a>)}
+	</div>
+
+	{
+		toc.length > 0 && (
+			<details open class={styles.toc}>
+				<summary class={styles.summary}>Table of contents</summary>
+				<ul class={styles.tocList}>
+					{toc.map((h) => (
+						<li class:list={[styles.tocItem, { [styles.sub]: h.depth === 3 }]}>
+							<a href={`#${h.slug}`} class={styles.tocLink}>{h.text}</a>
+						</li>
+					))}
+				</ul>
+			</details>
+		)
+	}
+
+	<article class="prose">
+		<Content />
+	</article>
+
+	<nav class={styles.pager}>
+		{
+			older ? (
+				<a href={`/posts/${older.id}/`} class={styles.page}>
+					<span class={styles.label}>Previous</span>
+					{older.data.title}
+				</a>
+			) : (
+				<span />
+			)
+		}
+		{
+			newer && (
+				<a href={`/posts/${newer.id}/`} class:list={[styles.page, styles.next]}>
+					<span class={styles.label}>Next</span>
+					{newer.data.title}
+				</a>
+			)
+		}
+	</nav>
+</Base>

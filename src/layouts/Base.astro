@@ -1,25 +1,52 @@
 ---
 import 'katex/dist/katex.min.css';
+import '@/styles/global.css';
+import styles from './Base.module.css';
+import Header from '@/components/layout/header/Header.astro';
+import Footer from '@/components/layout/footer/Footer.astro';
+import { SITE } from '@/lib/site';
 
-const { title = 'Educational Docs' } = Astro.props.frontmatter ?? Astro.props;
-const slug = Astro.url.pathname.replace(/^\/|\/$/g, '') || 'index';
-const ogImage = new URL(`/og/${slug}.png`, Astro.site);
+interface Props {
+	title?: string;
+	description?: string;
+	ogImage?: string;
+}
+
+const { title, description = SITE.description, ogImage = '/og/index.png' } = Astro.props;
+const fullTitle = title ? `${title} | ${SITE.title}` : SITE.title;
 ---
 
+<!doctype html>
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
-		<title>{title}</title>
+		<title>{fullTitle}</title>
+		<meta name="description" content={description} />
 		<link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
-		<meta property="og:title" content={title} />
-		<meta property="og:image" content={ogImage} />
+		<link rel="sitemap" href="/sitemap-index.xml" />
+		<meta property="og:title" content={fullTitle} />
+		<meta property="og:description" content={description} />
+		<meta property="og:image" content={new URL(ogImage, Astro.site)} />
 		<meta name="twitter:card" content="summary_large_image" />
+		<script is:inline>
+			// Before paint, so there's no light flash in dark mode
+			const t =
+				localStorage.getItem('theme') ??
+				(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+			document.documentElement.dataset.theme = t;
+		</script>
 	</head>
 	<body>
-		<slot />
+		<a class:list={["sr-only", styles.skip]} href="#main">Skip to content</a>
+		<Header />
+		<main id="main">
+			<slot />
+		</main>
+		<Footer />
 	</body>
 </html>
+

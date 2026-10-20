@@ -14,12 +14,27 @@
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.3",
     "@astrojs/mdx": "^8.1.0",
+    "@astrojs/react": "^7.1.0",
     "@astrojs/sitemap": "^3.7.4",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
     "@resvg/resvg-js": "^2.6.2",
     "astro": "^7.4.1",
+    "jsxgraph": "^1.14.0",
     "katex": "^0.19.0",
+    "mafs": "^0.21.0",
+    "mathbox": "^2.3.2-rc1",
+    "p5": "^2.3.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0",
-    "satori": "^0.63.1"
+    "satori": "^0.63.1",
+    "three": "0.162.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "0.162.0"
   }
 }

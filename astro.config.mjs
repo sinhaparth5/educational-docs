@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
+import react from '@astrojs/react';
 import { unified } from '@astrojs/markdown-remark';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -44,6 +45,7 @@ export default defineConfig({
 	site: 'https://edu.parthsinha.com',
 	integrations: [
 		mdx(),
+		react(),
 		sitemap({
 			filter: (page) => !page.includes('/drafts/'),
 		}),
@@ -55,12 +57,19 @@ export default defineConfig({
 			rehypePlugins: [rehypeKatex],
 		}),
 		shikiConfig: {
-			theme: 'github-dark-dimmed',
+			themes: { light: 'github-light', dark: 'github-dark-dimmed' },
 		},
 	},
 	vite: {
 		build: {
+			// Big chunks are viz libs inside client:visible islands, loaded only on scroll
+			chunkSizeWarningLimit: 1500,
 			rollupOptions: {
+				onwarn(warning, warn) {
+					// jsxgraph's own eval, can't fix from here
+					if (warning.code === 'EVAL' && warning.id?.includes('jsxgraph')) return;
+					warn(warning);
+				},
 				output: {
 					// Keep heavy viz libs out of the shared bundle
 					manualChunks(id) {

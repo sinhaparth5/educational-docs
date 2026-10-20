@@ -1,0 +1,18 @@
+.footer {
+	max-width: var(--width);
+	width: 100%;
+	margin: 0 auto;
+	padding: 1.5rem 1rem;
+	display: flex;
+	justify-content: space-between;
+	font-size: 0.875rem;
+	color: var(--muted);
+	border-top: 1px solid var(--border);
+}
+
+.link {
+	text-decoration: none;
+}
+.link:hover {
+	color: var(--fg-strong);
+}

@@ -1,0 +1,25 @@
+---
+import Base from '@/layouts/Base.astro';
+import PostItem from '@/components/posts/post-item/PostItem.astro';
+import { getPosts } from '@/lib/site';
+import styles from '@/styles/pages/listing.module.css';
+
+export async function getStaticPaths() {
+	const posts = await getPosts();
+	const tags = new Set(posts.flatMap((p) => p.data.tags));
+	return [...tags].map((tag) => ({
+		params: { tag },
+		props: { posts: posts.filter((p) => p.data.tags.includes(tag)) },
+	}));
+}
+
+const { tag } = Astro.params;
+const { posts } = Astro.props;
+---
+
+<Base title={`#${tag}`} description={`Posts tagged ${tag}.`}>
+	<h1 class={styles.heading}>#{tag}</h1>
+	<p class={styles.sub}>All the articles with the tag "{tag}".</p>
+	<ul class={styles.list}>{posts.map((post) => <PostItem post={post} />)}</ul>
+</Base>
+

@@ -1,0 +1,13 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { formatDate } from '@/lib/site';
+import styles from './PostItem.module.css';
+
+const { post } = Astro.props as { post: CollectionEntry<'posts'> };
+---
+
+<li class={styles.item}>
+	<a href={`/posts/${post.id}/`} class={styles.link}><h2 class={styles.title}>{post.data.title}</h2></a>
+	<time class={styles.date} datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
+	<p class={styles.desc}>{post.data.description}</p>
+</li>

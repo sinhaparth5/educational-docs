@@ -1,0 +1,47 @@
+---
+title: Math demo
+description: KaTeX, code highlighting and four interactive visualization libraries in one post.
+date: 2026-10-20
+tags: [math, demo]
+---
+
+import TangentLine from '@/components/viz/tangent-line/TangentLine.tsx';
+import Pendulum from '@/components/viz/pendulum/Pendulum.tsx';
+import Midpoint from '@/components/viz/midpoint/Midpoint.tsx';
+import Surface from '@/components/viz/surface/Surface.tsx';
+
+Inline: $e^{i\pi} + 1 = 0$
+
+$$
+\int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2}
+$$
+
+```js
+const answer = 42;
+```
+
+## Tangent lines (Mafs)
+
+The derivative of $\sin x$ is $\cos x$. Drag the point:
+
+<TangentLine client:visible />
+
+## Pendulum (p5.js)
+
+$$
+\ddot\theta = -\frac{g}{L}\sin\theta
+$$
+
+<Pendulum client:visible />
+
+## Midpoint construction (JSXGraph)
+
+<Midpoint client:visible />
+
+## Surfaces (MathBox)
+
+$$
+z = \sin x \cos(y + t)
+$$
+
+<Surface client:visible />

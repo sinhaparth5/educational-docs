@@ -1,0 +1,9 @@
+---
+import { SITE } from '@/lib/site';
+import styles from './Footer.module.css';
+---
+
+<footer class={styles.footer}>
+	<span>&copy; {new Date().getFullYear()} {SITE.title}</span>
+	<a href="/sitemap-index.xml" class={styles.link}>Sitemap</a>
+</footer>

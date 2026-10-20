@@ -1,0 +1,15 @@
+---
+import Base from '@/layouts/Base.astro';
+import { getPosts } from '@/lib/site';
+import styles from '@/styles/pages/listing.module.css';
+
+const tags = [...new Set((await getPosts()).flatMap((p) => p.data.tags))].sort();
+---
+
+<Base title="Tags" description="All tags used in posts.">
+	<h1 class={styles.heading}>Tags</h1>
+	<p class={styles.sub}>All the tags used in posts.</p>
+	<ul class={styles.tags}>
+		{tags.map((tag) => <li><a href={`/tags/${tag}/`} class={styles.tag}>#{tag}</a></li>)}
+	</ul>
+</Base>
