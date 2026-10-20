@@ -164,6 +164,36 @@ a {
 	}
 }
 
+/* Citations and reference list from rehype-citation (IEEE style) */
+.prose .cite {
+	text-decoration: none;
+	white-space: nowrap;
+}
+.prose .cite:hover {
+	text-decoration: underline;
+}
+.prose .references {
+	font-size: 0.9rem;
+	line-height: 1.6;
+}
+.prose .csl-entry {
+	display: grid;
+	grid-template-columns: 2.5rem 1fr;
+	margin-bottom: 0.6rem;
+	scroll-margin-top: 6rem;
+}
+.prose .csl-left-margin {
+	color: var(--muted);
+}
+.prose .csl-right-inline {
+	overflow-wrap: anywhere; /* long URLs */
+}
+/* Briefly mark the entry a citation jumped to */
+.prose .csl-entry:target {
+	background: var(--hover);
+	border-radius: 4px;
+}
+
 /* Shiki dual theme: light colors are inline, swap to dark vars.
    Backgrounds use the palette's --code-bg instead of the Shiki theme's own. */
 .astro-code {

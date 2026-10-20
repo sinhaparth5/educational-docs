@@ -10,6 +10,12 @@
 
 .lead {
 	margin: 0 0 0.75rem;
+	max-width: 62ch;
+}
+
+.inline {
+	color: var(--accent);
+	text-underline-offset: 3px;
 }
 
 .social {

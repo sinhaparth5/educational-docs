@@ -23,14 +23,20 @@ const jsonLd = {
 	<script slot="head" type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 
 	<section class={styles.hero}>
-		<h1 class={styles.title}>{SITE.title}</h1>
-		<p class={styles.lead}>{SITE.description}</p>
+		<h1 class={styles.title}>Hi, I'm {SITE.author}.</h1>
 		<p class={styles.lead}>
-			Read the blog posts or browse them by tag. Each post mixes prose and equations with small
-			visualizations you can drag and explore.
+			I write about math and computing. Most posts mix prose and equations with figures you can play
+			with: drag a point along a curve, move a slider, edit a formula and watch the graph redraw, or
+			turn a 3D surface around to see it from another side.
+		</p>
+		<p class={styles.lead}>
+			Start with the posts below, browse by <a href="/tags/" class={styles.inline}>tag</a>, or <a
+				href="/search/"
+				class={styles.inline}>search</a
+			> for something specific.
 		</p>
 		<div class={styles.social}>
-			<span class={styles.socialLabel}>Find me on</span>
+			<span class={styles.socialLabel}>Elsewhere:</span>
 			<Socials />
 		</div>
 	</section>

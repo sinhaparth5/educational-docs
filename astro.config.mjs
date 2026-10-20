@@ -7,6 +7,7 @@ import { unified, rehypeHeadingIds } from '@astrojs/markdown-remark';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
+import rehypeCitation from 'rehype-citation';
 import * as pagefind from 'pagefind';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -63,6 +64,75 @@ function search() {
 	};
 }
 
+/**
+ * Finishes rehype-citation's output:
+ * - links each [n] to its entry (rehype-citation's own `linkCitations` crashes on
+ *   locators like [@key, p. 9], so it stays off and this does the linking)
+ * - makes URLs in the reference list clickable
+ * - puts an h2 "References" above the list so it gets an anchor and a TOC entry
+ */
+function rehypeReferences() {
+	/** @param {any} node @param {(n: any) => void} fn */
+	const walk = (node, fn) => {
+		fn(node);
+		node.children?.forEach((/** @type {any} */ c) => walk(c, fn));
+	};
+	/** @param {string} key @param {string} text */
+	const link = (key, text) => ({
+		type: 'element',
+		tagName: 'a',
+		properties: { href: `#bib-${key}`, className: ['cite'] },
+		children: [{ type: 'text', value: text }],
+	});
+
+	/** @param {any} tree */
+	return (tree) => {
+		walk(tree, (node) => {
+			const id = node.properties?.id;
+			if (node.tagName !== 'span' || typeof id !== 'string' || !id.startsWith('citation--')) return;
+			// id looks like citation--key1--key2--<n>; text like "[1, p. 9]" or "[2], [3]"
+			const keys = id.split('--').slice(1, -1);
+			const text = node.children.map((/** @type {any} */ c) => c.value ?? '').join('');
+			const groups = text.match(/\[[^\]]*\]/g) ?? [];
+			if (groups.length === keys.length) {
+				const parts = text.split(/(\[[^\]]*\])/);
+				let k = 0;
+				node.children = parts
+					.filter(Boolean)
+					.map((/** @type {string} */ part) => (/^\[.*\]$/.test(part) ? link(keys[k++], part) : { type: 'text', value: part }));
+			} else {
+				node.children = [link(keys[0], text)]; // collapsed ranges like [2]–[4]
+			}
+		});
+
+		const i = tree.children.findIndex((/** @type {any} */ n) => n.properties?.id === 'refs');
+		if (i === -1) return;
+
+		walk(tree.children[i], (node) => {
+			if (!node.children || node.tagName === 'a') return; // don't re-wrap links we just made
+			node.children = node.children.flatMap((/** @type {any} */ c) =>
+				c.type !== 'text'
+					? [c]
+					: c.value
+							.split(/(https?:\/\/[^\s)]+)/)
+							.filter(Boolean)
+							.map((/** @type {string} */ part) =>
+								/^https?:/.test(part)
+									? { type: 'element', tagName: 'a', properties: { href: part }, children: [{ type: 'text', value: part }] }
+									: { type: 'text', value: part },
+							),
+			);
+		});
+
+		tree.children.splice(i, 0, {
+			type: 'element',
+			tagName: 'h2',
+			properties: {},
+			children: [{ type: 'text', value: 'References' }],
+		});
+	};
+}
+
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://edu.parthsinha.com',
@@ -85,6 +155,15 @@ export default defineConfig({
 			remarkPlugins: [remarkMath],
 			rehypePlugins: [
 				rehypeKatex,
+				// [@key] → IEEE-style [1] linked to a numbered list at the end of the post
+				[
+					rehypeCitation,
+					{
+						bibliography: 'src/content/references/references.bib',
+						csl: 'src/content/references/ieee.csl',
+					},
+				],
+				rehypeReferences,
 				rehypeHeadingIds, // ids must exist before autolink runs
 				[
 					rehypeAutolinkHeadings,

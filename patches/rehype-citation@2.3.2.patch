@@ -1,0 +1,29 @@
+diff --git a/node_modules/rehype-citation/.bun-tag-db57affd27870844 b/.bun-tag-db57affd27870844
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/dist/node/cite.mjs b/dist/node/cite.mjs
+index d058a8bd930d320c6548313caa7aaf48cb27f248..ff43d171d861533b76b422aeb3a5cb91c96f6a58 100644
+--- a/dist/node/cite.mjs
++++ b/dist/node/cite.mjs
+@@ -4,7 +4,7 @@ import path from 'path';
+ import Url from 'url';
+ import Stream from 'stream';
+ import http from 'http';
+-import punycode from 'punycode';
++import punycode from 'punycode/punycode.es6.js';
+ import https from 'https';
+ import zlib from 'zlib';
+ import { parse as parse$9, format as format$9 } from '@citation-js/date';
+diff --git a/dist/node/rehype-citation.mjs b/dist/node/rehype-citation.mjs
+index 57d48c7008c0a5591efa82bd9c674938365eaa30..05e43a4d3c6018b38557897ef9c68c9695a7e0ad 100644
+--- a/dist/node/rehype-citation.mjs
++++ b/dist/node/rehype-citation.mjs
+@@ -8,7 +8,7 @@ import path from 'path';
+ import Url from 'url';
+ import Stream from 'stream';
+ import http from 'http';
+-import punycode from 'punycode';
++import punycode from 'punycode/punycode.es6.js';
+ import https from 'https';
+ import zlib from 'zlib';
+ import { parse as parse$9, format as format$9 } from '@citation-js/date';

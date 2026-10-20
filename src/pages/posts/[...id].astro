@@ -86,27 +86,27 @@ const jsonLd = {
 
 	<Share title={title} />
 
-	<nav class={styles.pager} aria-label="More posts">
-		{
-			older ? (
-				<a href={`/posts/${older.id}/`} class={styles.page}>
-					<span class={styles.label}>Previous</span>
-					{older.data.title}
-				</a>
-			) : (
-				<span />
-			)
-		}
-		{
-			newer && (
-				<a href={`/posts/${newer.id}/`} class:list={[styles.page, styles.next]}>
-					<span class={styles.label}>Next</span>
-					{newer.data.title}
-				</a>
-			)
-		}
-	</nav>
-
 	<Related posts={related} />
 	<Comments />
+
+	{
+		(older || newer) && (
+			<nav class={styles.pager} aria-label="Previous and next posts">
+				{older ? (
+					<a href={`/posts/${older.id}/`} class={styles.page}>
+						<span class={styles.label}>← Previous</span>
+						{older.data.title}
+					</a>
+				) : (
+					<span />
+				)}
+				{newer && (
+					<a href={`/posts/${newer.id}/`} class:list={[styles.page, styles.next]}>
+						<span class={styles.label}>Next →</span>
+						{newer.data.title}
+					</a>
+				)}
+			</nav>
+		)
+	}
 </Base>
