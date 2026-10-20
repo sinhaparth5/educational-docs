@@ -1,0 +1,175 @@
+---
+title: Understanding FPGA
+description: What IOBs, CLBs, LUTs and configuration flash do inside an FPGA, using the Tang Nano 9K as the example board.
+date: 2026-10-20
+featured: true
+tags: [fpga, hardware, verilog]
+---
+
+Coming to FPGAs from microcontrollers like the Arduino or ESP32, the hardest part is the change
+in mindset. You aren't writing a program for a CPU to run one line at a time. You are describing
+a circuit, and the tools build that circuit out of the blocks already sitting on the chip.
+
+So it helps to know what those blocks are. These are my notes on the main ones, partly from
+EEVblog's "What Is An FPGA?" video [@eevblog496], with the Tang Nano 9K as the running example.
+
+## IOB: Input/Output Block
+
+An IOB sits right behind each physical pin, and the IOBs form a ring around the edge of the chip.
+They are the interface between the voltages on the board and the logic inside the FPGA. An IOB:
+
+- sets the pin's direction: input, output, or tri-state (high impedance)
+- sets the drive strength (for example 4 mA or 8 mA) and the slew rate
+- matches the logic standard and its voltage thresholds, such as 3.3 V LVCMOS or 1.8 V
+- has its own input and output flip-flops, so a signal can be latched right at the pin instead
+  of travelling through internal routing first
+
+<Note type="warning" title="Drive strength is not voltage">
+
+An IOB can't output more than its bank's supply voltage. If you drive a 5 V part, like a WS2812
+LED strip, from a 3.3 V pin, you still need an external level shifter such as a 74AHCT125.
+Without one, the signal may not cross the 5 V part's input threshold reliably, and a 5 V signal
+coming back the other way can damage the pin.
+
+</Note>
+
+## CLB: Configurable Logic Block
+
+The CLB is where the computation and storage happen. Vendors call it different things: a Logic
+Element (LE), a Slice, or a CLB. Each one contains:
+
+- **LUTs (look-up tables).** A LUT is a tiny truth table, usually with 4 or 6 inputs. The FPGA
+  doesn't compute AND, OR or XOR with dedicated gates. It stores the output for every input
+  combination and looks the answer up, so one LUT4 can implement any boolean function of four
+  inputs.
+- **D flip-flops.** Each one stores a single bit and updates on a clock edge. Counters, state
+  machines and anything else sequential are built from these.
+- **Multiplexers and carry logic.** Fast dedicated paths between neighbouring LUTs. The carry
+  chain lets addition and subtraction ripple through adjacent cells without going out to the
+  slower general routing.
+
+## How the pieces connect
+
+```text
+[ outside world ] <--> [ IOB ] <--> [ routing matrix ] <--> [ CLBs: logic + registers ]
+```
+
+The IOBs receive and drive the physical voltages at the pins. The programmable routing matrix
+connects them to the CLBs, and the CLBs do the processing: logic, counting and keeping state.
+
+## Flash memory and configuration
+
+The FPGA's internal configuration (what each LUT holds and how the routing is connected) lives
+in SRAM cells. SRAM is volatile, so the whole circuit disappears when the power goes off.
+
+The compiled design, a bitstream (`.fs` for Gowin, `.bit` for Xilinx), is therefore kept in
+non-volatile flash. Flash can be a separate chip on the board or built into the FPGA package.
+At power-up a small hardware loader reads the bitstream out of flash and writes it into the SRAM
+cells. That step is called configuration.
+
+The Tang Nano 9K's Gowin GW1NR-9 has the flash built in, so it doesn't need an external flash
+chip and your Verilog design is running almost as soon as the board gets power.
+
+## What's inside the Tang Nano 9K
+
+The board uses the Gowin GW1NR-9 (part number GW1NR-LV9QN88PC6/I5) [@gowin_ds117]:
+
+| Resource | Amount | Used for |
+| :-- | :-- | :-- |
+| LUT4 | 8,640 | combinational logic |
+| Flip-flops | 6,480 | registers and state |
+| Block SRAM (BSRAM) | 26 blocks, 468 Kbit total | buffers, FIFOs, arrays |
+| Shadow SRAM | built from LUTs | small distributed memories |
+| DSP multipliers | 10, each 18 × 18 | fast multiplication |
+
+There are two kinds of RAM here. BSRAM is a set of dedicated memory blocks, good for anything
+large. Shadow SRAM (distributed RAM) turns ordinary LUTs into very small memories, which suits
+a few registers' worth of storage but uses up logic.
+
+## From Verilog to hardware
+
+Here is the usual first design, an LED blinker:
+
+```verilog
+module led_blink (
+    input  wire clk,
+    output reg  led
+);
+    reg [23:0] counter = 0;
+
+    always @(posedge clk) begin
+        counter <= counter + 1'b1;
+        led     <= counter[23];
+    end
+endmodule
+```
+
+When Gowin EDA synthesizes this:
+
+- `counter` becomes 24 flip-flops in the CLBs, one per bit.
+- The `+ 1'b1` adder is built from LUTs and the carry chain.
+- `led` is a register driving a pin, so the tools can place it in that pin's IOB flip-flop.
+
+Which pin that is, and how the IOB behaves electrically, comes from a physical constraints
+file (`.cst`) [@gowin_ug289]:
+
+```text
+IO_LOC  "led" 10;
+IO_PORT "led" IO_TYPE=LVCMOS33 DRIVE=8;
+```
+
+`IO_LOC` picks the pin and `IO_PORT` configures its IOB. `IO_TYPE` has to match the voltage of the
+bank the pin belongs to, so check the board schematic before copying a line like this.
+
+## Docs worth downloading
+
+Get the technical documents from the manufacturer or the board maker. Gowin publishes its docs
+under Support → Documentation; I've mirrored the two I used here.
+
+<DocCard
+  title="GW1NR Series of FPGA Products Data Sheet (DS117)"
+  href="https://s3.wepyxis.space/imp-notes/DS117-3.2.5E_GW1NR%20series%20of%20FPGA%20Products%20Data%20Sheet.pdf"
+  source="https://www.gowinsemi.com/en/support/database/"
+  size="1.8 MB"
+>
+Resource counts, clock networks and I/O bank specs for the GW1NR-9 on the Tang Nano 9K, version
+3.2.5E [@gowin_ds117].
+</DocCard>
+
+<DocCard
+  title="Gowin Programmable IO (GPIO) User Guide (UG289)"
+  href="https://s3.wepyxis.space/imp-notes/UG289-2.2.1E_Gowin%20Programmable%20IO%20%28GPIO%29%20User%20Guide.pdf"
+  source="https://www.gowinsemi.com/en/support/database/"
+  size="1.5 MB"
+>
+How IOBs are configured: I/O standards, drive strength, pull modes and the `.cst` attributes,
+version 2.2.1E [@gowin_ug289].
+</DocCard>
+
+Sipeed's wiki page for the Tang Nano 9K [@sipeed_tangnano9k] has the schematic PDFs, pinout
+diagrams, `.cst` constraint templates and board layout files.
+
+## FPGAs then and now
+
+The EEVblog video I learned from is from 2013 [@eevblog496], about 13 years old now, and it
+compares FPGAs against microcontrollers and ASICs. A lot of the downsides of that era have
+changed since.
+
+**Power.** Thirteen years ago FPGAs drew a lot of static power, since they were made on 90 nm or
+65 nm processes. Low-power families today (Gowin, Lattice iCE40, Xilinx Artix) use low-leakage
+processes at 28 nm and below and draw milliwatts, which makes battery-powered devices realistic.
+
+**Cost.** Development boards used to cost hundreds of dollars and tool licenses thousands. The
+Tang Nano 9K, with 8.6K LUTs, embedded RAM and a built-in programmer, costs around $15 to $20.
+The vendor tools are free, and there are open-source ones too: Yosys for synthesis and nextpnr
+for place and route.
+
+**Difficulty.** You once had to write everything yourself in HDL: soft CPUs, RAM controllers,
+interfaces. Many FPGAs now include hard IP in the silicon, such as I2C and SPI controllers, DSP
+blocks and even RISC-V cores. High-level synthesis (HLS) tools can also turn C or C++ into
+hardware.
+
+**Speed.** This one hasn't changed. An ASIC, or a dedicated chip like a GPU, will always beat an
+FPGA at a fixed task, because the FPGA's programmable routing adds capacitance and therefore
+delay. The FPGA's advantage is that you can change it. Reflashing takes seconds, while a new ASIC
+costs millions of dollars and spends 6 to 12 months in a fab.

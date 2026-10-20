@@ -12,6 +12,7 @@ import Theorem from '@/components/math/theorem/Theorem.astro';
 import Proof from '@/components/math/proof/Proof.astro';
 import Note from '@/components/math/note/Note.astro';
 import Sidenote from '@/components/math/sidenote/Sidenote.astro';
+import DocCard from '@/components/posts/doc-card/DocCard.astro';
 import { SITE, getPosts, readingTime, relatedPosts, seriesParts } from '@/lib/site';
 import styles from '@/styles/pages/post.module.css';
 import literataLatin from '@fontsource-variable/literata/files/literata-latin-wght-normal.woff2?url';
@@ -79,7 +80,7 @@ const jsonLd = {
 		<Toc headings={headings} />
 
 		<article class="prose">
-			<Content components={{ Theorem, Proof, Note, Sidenote }} />
+			<Content components={{ Theorem, Proof, Note, Sidenote, DocCard }} />
 		</article>
 	</div>
 	<CopyCode />

@@ -143,6 +143,41 @@ a {
 	overflow-y: hidden;
 }
 
+/* Markdown tables: scroll sideways inside themselves on narrow screens instead of
+   widening the page. max-content + block lets a small table stay small. */
+.prose table {
+	display: block;
+	width: max-content;
+	max-width: 100%;
+	margin: 1.5rem 0;
+	overflow-x: auto;
+	border-collapse: collapse;
+	font-size: 0.9375rem;
+	line-height: 1.5;
+	font-variant-numeric: tabular-nums;
+}
+.prose th,
+.prose td {
+	padding: 0.5rem 1rem 0.5rem 0;
+	border-bottom: 1px solid var(--border);
+	text-align: left;
+	vertical-align: top;
+}
+.prose :is(th, td):last-child {
+	padding-right: 0;
+}
+.prose th {
+	font-family: var(--sans);
+	font-size: 0.8125rem;
+	font-weight: 600;
+	color: var(--muted);
+	white-space: nowrap;
+	border-bottom-color: var(--muted);
+}
+.prose tbody tr:hover {
+	background: var(--hover);
+}
+
 /* Heading anchors from rehype-autolink-headings, shown on hover.
    Underlined so they're distinguishable from the heading without relying on color. */
 .prose .anchor {

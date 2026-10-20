@@ -1,0 +1,63 @@
+.card {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 0.75rem;
+	margin: 1.5rem 0;
+	padding: 1rem;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+}
+
+.icon {
+	width: 1.75rem;
+	height: 1.75rem;
+	color: var(--accent);
+}
+
+.title {
+	margin: 0;
+	font-weight: 600;
+	color: var(--fg-strong);
+}
+
+.desc {
+	font-size: 0.9375rem;
+}
+.desc > :global(*) {
+	margin: 0.25rem 0 0;
+}
+
+.links {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem 1rem;
+	margin-top: 0.75rem;
+	font-size: 0.875rem;
+}
+/* two classes so they win over .prose a */
+.card .download,
+.card .source {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+.card .download {
+	padding: 0.35rem 0.75rem;
+	border-radius: 6px;
+	background: var(--accent);
+	color: var(--bg);
+	text-decoration: none;
+	font-weight: 500;
+}
+.card .download:hover {
+	color: var(--bg); /* keep over .prose a:hover */
+	background: color-mix(in srgb, var(--accent) 80%, var(--fg-strong)); /* more contrast, both themes */
+}
+.card .source {
+	color: var(--muted);
+}
+.links svg {
+	width: 1rem;
+	height: 1rem;
+}

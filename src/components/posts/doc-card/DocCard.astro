@@ -1,0 +1,33 @@
+---
+import PdfIcon from '@tabler/icons/outline/file-type-pdf.svg';
+import Download from '@tabler/icons/outline/download.svg';
+import External from '@tabler/icons/outline/external-link.svg';
+import styles from './DocCard.module.css';
+
+interface Props {
+	title: string;
+	/** Direct link to the PDF (our mirror) */
+	href: string;
+	/** The publisher's page for the same document */
+	source: string;
+	size?: string;
+}
+
+const { title, href, source, size } = Astro.props;
+---
+
+<div class={styles.card}>
+	<PdfIcon class={styles.icon} aria-hidden="true" />
+	<div>
+		<p class={styles.title}>{title}</p>
+		<div class={styles.desc}><slot /></div>
+		<div class={styles.links}>
+			<a class={styles.download} href={href} target="_blank" rel="noopener">
+				<Download aria-hidden="true" /> Download PDF{size && ` (${size})`}
+			</a>
+			<a class={styles.source} href={source} target="_blank" rel="noopener">
+				Official source <External aria-hidden="true" />
+			</a>
+		</div>
+	</div>
+</div>
