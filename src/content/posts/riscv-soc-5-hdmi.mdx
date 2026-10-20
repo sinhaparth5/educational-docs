@@ -1,0 +1,190 @@
+---
+title: "RISC-V SoC, part 5: an HDMI text console"
+description: Pixel clocks, video timing, text mode, TMDS encoding and serializers, then a 90×30 character display that mirrors the shell. It passes simulation and builds, but hasn't been on a monitor yet.
+date: 2026-10-20
+cover: ./images/riscv-soc-5.jpg
+coverAlt: A Tang Nano 9K board connected by an HDMI cable carrying glowing serial bit lanes to a monitor showing a grid of blocky text characters, with a magnified inset of the letter A on an 8 by 16 pixel grid
+tags: [fpga, risc-v, verilog, hdmi, tang-nano-9k]
+series: { name: "RISC-V SoC on a Tang Nano 9K", part: 5 }
+---
+
+The Tang Nano 9K has an HDMI connector wired straight to FPGA pins. There's no video chip
+between them, so the FPGA has to produce the signal itself, bit by bit, at hundreds of megabits
+per second. This part does that and shows the shell from [part 4](/posts/riscv-soc-4-accelerator/)
+on a screen as 90 columns by 30 rows of text. Code: `phases/p5_hdmi` in the
+[repo](https://github.com/sinhaparth5/tangnano9k-riscv-soc) [@tn9k_soc_repo].
+
+<Note type="warning" title="Status: simulated, not yet seen on a monitor">
+
+The design passes its simulation tests and produces a bitstream, but I haven't connected it to a
+display yet. The PLL, serializer and LVDS output primitives only exist on the real chip, so
+simulation doesn't cover them, and the HDMI pin numbers in the constraint file still need
+checking against the board schematic. So this part walks through the design, and the result on
+a real screen is still unknown.
+
+</Note>
+
+## The basics
+
+### Terms used in this part
+
+| Term | Meaning |
+| :-- | :-- |
+| Pixel clock | The rate at which pixels go out, one per clock, including the invisible ones in blanking. |
+| Active area | The pixels you see, 720 × 480 here. |
+| Blanking | Time at the end of each line and frame with no visible pixels, left over from CRT beam return. |
+| Sync pulses | HSYNC marks a new line, VSYNC a new frame. They sit inside blanking. |
+| Porches | The gaps in blanking before a sync pulse (front porch) and after it (back porch). |
+| DE | Data enable. High during the active area, low during blanking. |
+| DVI / HDMI | Digital video interfaces. HDMI carries DVI's video signal plus audio and metadata; plain DVI video is enough for a picture. |
+| TMDS | Transition-minimized differential signalling, the line code DVI and HDMI use. |
+| Serializer | Turns a parallel word into a fast serial bit stream. Gowin's 10-to-1 one is `OSER10`. |
+| PLL | Phase-locked loop. Makes a new clock frequency from an existing one. |
+
+### Video timing
+
+A display is still drawn like a CRT, line by line from the top left, and each line and each frame
+is padded with blanking. The standard 720×480p60 mode from CTA-861 [@cta861] uses:
+
+| | Active | Front porch | Sync | Back porch | Total |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| Horizontal (pixels) | 720 | 16 | 62 | 60 | 858 |
+| Vertical (lines) | 480 | 9 | 6 | 30 | 525 |
+
+Both sync pulses are active-low in this mode. The refresh rate follows from the totals:
+
+$$
+f_\text{frame} = \frac{f_\text{pixel}}{858 \times 525} = \frac{27\,\text{MHz}}{450\,450} \approx 59.94\,\text{Hz}
+$$
+
+The pixel clock for this mode is 27 MHz, which is exactly the frequency of the board's
+oscillator.
+
+In hardware, the timing generator is two counters, `x` up to 857 and `y` up to 524. DE and the
+sync signals are comparisons on those counters.
+
+### Text mode
+
+A 720×480 one-bit framebuffer would need 43 KB, more than all the RAM the CPU has. Text mode is
+the old trick that avoids it: store one byte per character cell, and look up each cell's pixels
+in a font as the beam passes. With an 8×16 font, 720×480 becomes 90×30 cells:
+
+- Character RAM: 90 × 30 = 2,700 bytes, written by the CPU.
+- Font ROM: 128 characters × 16 rows × 1 byte = 2 KB, one bit per pixel.
+
+For pixel $(x, y)$ the hardware reads the character at cell
+$(\lfloor x/8 \rfloor, \lfloor y/16 \rfloor)$, then row $y \bmod 16$ of that character's glyph,
+then bit $x \bmod 8$ of that row. Because cells are powers of two in size, those divisions are
+just picking bits out of the counters.
+
+### TMDS
+
+DVI sends each pixel as three 8-bit colour values on three data lanes, plus a fourth lane for the
+clock [@dvi10]. Each 8-bit value is encoded as 10 bits in two steps:
+
+1. Transition minimizing. Each bit is XORed or XNORed with the previous encoded bit, whichever
+   gives fewer 0-to-1 and 1-to-0 changes. Bit 8 records which one was used.
+2. DC balancing. The encoder keeps a running count of ones minus zeros sent so far. If the new
+   word would push that count further from zero, all 8 data bits are inverted and bit 9 says so.
+
+Fewer transitions means less high-frequency noise on the cable, and a balance of ones and zeros
+keeps the receiver's input from drifting. During blanking there are no pixels, so the lanes send
+one of four fixed 10-bit control tokens instead. On the blue lane those tokens carry HSYNC and
+VSYNC.
+
+### Getting bits out fast enough
+
+10 bits per pixel at 27 MHz means each lane runs at 270 Mbit/s, ten times the pixel clock. The
+fabric can't run logic that fast, so the last step uses dedicated hardware:
+
+- The PLL multiplies 27 MHz up to 135 MHz.
+- An `OSER10` serializer per lane takes 10 bits per pixel clock and shifts them out on both edges
+  of the 135 MHz clock, which is 270 Mbit/s.
+- A `CLKDIV` divides 135 MHz by 5 to make the 27 MHz pixel clock, so the two clocks stay in step.
+- Each serial stream leaves through a differential output buffer, as a P and N pin pair.
+
+## The experiment
+
+### The video block
+
+`video.v` is the timing counters plus a three-stage pipeline. Each stage is one block-RAM read or
+one register, so the path between any two flip-flops stays short:
+
+1. The counters become a character address.
+2. Read the character RAM.
+3. Read the glyph row from the font ROM, then pick the pixel bit.
+
+Because the pixel comes out three clocks after its counters, DE, HSYNC and VSYNC go through
+three-stage shift registers too, so they line up with the right pixel.
+
+The address calculation needs `row * 90`. Instead of a multiplier, it's written as shifts,
+since $90 = 64 + 16 + 8 + 2$:
+
+```verilog
+wire [11:0] addr = (row << 6) + (row << 4) + (row << 3) + (row << 1) + x[9:3];   // row*90 + col
+```
+
+The font is a standard 8×16 Linux console font, converted to a `$readmemh` file by a short
+Python script, `tools/psf2hex.py`.
+
+### Scrolling without copying
+
+When the cursor reaches the bottom, a terminal scrolls everything up a line. Copying 2,610 bytes
+over a one-wait-state bus on every new line would be slow. Instead the hardware has a 5-bit
+register, `VOFF`, at `0x3000_1000`, which says which stored row appears at the top of the screen:
+
+```verilog
+wire [5:0] sum = ty + voff;                          // 0..58
+wire [4:0] row = sum >= 30 ? sum - 30 : sum;         // physical row
+```
+
+To scroll, the firmware increments `VOFF` and blanks one row, 90 writes in all:
+
+```c
+static void vnl(void) {
+    cx = 0;
+    if (cy < ROWS - 1) { cy++; return; }
+    top = (top + 1) % ROWS; VOFF = top;       // row 0 moves to the bottom
+    vblank(ROWS - 1);
+}
+```
+
+The firmware's `putc_` now writes every character to the screen as well as the UART, so the
+whole shell appears on both.
+
+### The board top level
+
+`top.v` holds the parts that only exist on the chip: the PLL, the `/5` clock divider, three TMDS
+encoders and four `OSER10`s. The clock lane serializes the constant `1111100000`, which comes out
+as a 27 MHz square wave. The whole CPU system from part 4 now runs on the PLL's 27 MHz output
+and stays in reset until the PLL reports lock.
+
+### What the simulation checks
+
+The testbench runs the real firmware on the SoC, types `help` into the UART, and checks:
+
+- Line length is 858 clocks and HSYNC is 62 clocks wide.
+- Frame length is 858 × 525 clocks and VSYNC is 6 lines wide.
+- A separate TMDS encoder fed pseudo-random bytes decodes back to the same bytes, and the running
+  disparity stays bounded.
+
+It also dumps one rendered frame to `build/frame.pbm`, an image file you can open to see the
+banner and the help text drawn in the font. All of this passes.
+
+### The pin problem
+
+The first bitstream build failed at the packing step. I'd used `TLVDS_OBUF`, a true LVDS output
+buffer, and the tool reported that the HDMI pins are an emulated LVDS location. On Gowin parts
+only some banks have true LVDS drivers. Elsewhere, emulated LVDS (`ELVDS_OBUF`) drives the P and N
+pins as two complementary single-ended outputs [@gowin_ug289]. Switching to `ELVDS_OBUF` made
+the bitstream build. The pins are set to `LVCMOS33D`, the differential 3.3 V standard.
+
+### Resources
+
+| | LUT4 | BSRAM | Fmax |
+| :-- | :-- | :-- | :-- |
+| Part 4, CPU + accelerator | 4,019 | 8 | 53 MHz |
+| Part 5, + HDMI text console | 4,382 | 11 | 54 MHz |
+
+The video logic costs about 360 LUTs and three block RAMs, for the character RAM and the font.
+About half the chip is still free.

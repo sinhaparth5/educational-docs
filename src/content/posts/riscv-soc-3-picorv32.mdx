@@ -1,0 +1,194 @@
+---
+title: "RISC-V SoC, part 3: a PicoRV32 CPU running C"
+description: Instruction sets, RV32IMC, soft cores, memory-mapped I/O and linker scripts, then a PicoRV32 with 16 KB of block RAM that boots C firmware and prints over the UART.
+date: 2026-10-20
+cover: ./images/riscv-soc-3.jpg
+coverAlt: A Tang Nano 9K board with an exploded glass view of its chip above it, showing a CPU core joined by a bright bus to a RAM array and a serial port block, with lines of code drifting upward
+tags: [fpga, risc-v, verilog, tang-nano-9k]
+series: { name: "RISC-V SoC on a Tang Nano 9K", part: 3 }
+---
+
+In this part the FPGA becomes a small computer. A RISC-V CPU, 16 KB of RAM and the UART from
+[part 2](/posts/riscv-soc-2-uart/) are wired together on a simple bus, and C code compiled with
+GCC runs on it. Code: `phases/p3_cpu` in the
+[repo](https://github.com/sinhaparth5/tangnano9k-riscv-soc) [@tn9k_soc_repo].
+
+## The basics
+
+### Terms used in this part
+
+| Term | Meaning |
+| :-- | :-- |
+| ISA | Instruction set architecture. The contract between software and a CPU: the instructions, registers and how memory is addressed. |
+| RISC-V | An open ISA. Anyone can build a CPU for it without a licence. |
+| Soft core | A CPU built from the FPGA's LUTs and flip-flops, as opposed to a hard core etched into the silicon. |
+| SoC | System on a chip. CPU, memory and peripherals together on one chip. |
+| Bus | The shared set of address, data and handshake wires the CPU uses to reach memory and peripherals. |
+| MMIO | Memory-mapped I/O. Peripherals answer at memory addresses, so ordinary loads and stores control them. |
+| BSRAM | Gowin's block SRAM. Dedicated RAM blocks on the chip, 26 of them on the GW1NR-9. |
+| CPI | Cycles per instruction, averaged over a program. |
+
+### RISC-V and RV32IMC
+
+RISC-V is modular [@riscv_unpriv]. Every implementation has a base integer instruction set, and
+optional extensions are named by letters. The name `RV32IMC` reads as:
+
+- `RV32I`, the 32-bit base: 32 registers, integer add, logic, shifts, loads, stores, branches.
+- `M`, hardware multiply and divide. Without it, the compiler calls a software routine for `*` and `/`.
+- `C`, compressed instructions. The most common instructions get 16-bit encodings, so code is
+  about a quarter smaller. That matters when all your code has to fit in 16 KB.
+
+GCC targets exactly this with `-march=rv32imc -mabi=ilp32`, where `ilp32` means `int`, `long` and
+pointers are all 32 bits.
+
+### PicoRV32
+
+Writing a CPU is its own project, so I used PicoRV32 [@picorv32], a RISC-V core written in a
+single Verilog file and designed to be small rather than fast. It doesn't pipeline instructions,
+and its README gives an average CPI of about 4. At 27 MHz that's roughly 7 million instructions
+per second, plenty for a serial shell.
+
+Its native memory interface is simple. To read or write, the CPU raises `mem_valid` and puts out
+an address, and for a write the data and `mem_wstrb`, four write enables, one per byte. It waits
+until the other side raises `mem_ready`, and for a read it takes `mem_rdata` on that cycle.
+Every access, whether it's fetching an instruction or writing to the UART, goes through this
+one handshake.
+
+### Memory-mapped I/O
+
+The CPU only knows how to load and store at addresses. To reach a peripheral, the hardware gives
+it an address range and a small decoder routes each access to the right block based on the top
+address bits. This SoC uses the top 4 bits:
+
+| Address | Block |
+| :-- | :-- |
+| `0x0000_0000` to `0x0000_3FFF` | 16 KB RAM: code, data, stack |
+| `0x1000_0000` | UART data. A write sends a byte, a read returns the received byte |
+| `0x1000_0004` | UART status. Bit 0 is TX busy, bit 1 is RX full |
+
+In C a peripheral register is a pointer to a fixed address, marked `volatile` so the compiler
+reads it every time instead of caching the value:
+
+```c
+#define UART_DATA   (*(volatile unsigned *)0x10000000)
+#define UART_STATUS (*(volatile unsigned *)0x10000004)
+```
+
+### Bare-metal startup
+
+There's no operating system and no C library. Before `main` can run, something has to set up a
+stack and zero the variables that C promises start at zero (the `.bss` section). That's the job of
+a few lines of assembly, `start.S`, and a linker script that tells the linker where things go:
+
+```text
+MEMORY { RAM (rwx) : ORIGIN = 0, LENGTH = 16K }
+SECTIONS {
+    .text   : { *(.text._start) *(.text*) *(.rodata*) *(.srodata*) } > RAM
+    .data   : { *(.data*) *(.sdata*) } > RAM
+    .bss    : { _bss = .; *(.bss*) *(.sbss*) *(COMMON) _ebss = .; } > RAM
+}
+```
+
+`_start` is placed first, at address 0, because that's where PicoRV32 starts fetching after
+reset. It sets the stack pointer to `0x4000`, the top of RAM (the stack grows down), clears
+`.bss` between `_bss` and `_ebss`, and calls `main`.
+
+## The experiment
+
+### Wiring it up
+
+The top level instantiates PicoRV32 with the multiplier, divider and compressed instructions
+turned on:
+
+```verilog
+picorv32 #(
+    .ENABLE_MUL(1), .ENABLE_DIV(1), .COMPRESSED_ISA(1),
+    .PROGADDR_RESET(32'h0), .STACKADDR(32'h0000_4000)
+) cpu ( ... );
+```
+
+The RAM is a plain Verilog array with per-byte write enables, which Yosys maps onto 8 BSRAM
+blocks:
+
+```verilog
+reg [31:0] mem [0:4095];                 // 4096 words = 16 KB
+initial $readmemh(HEX, mem);
+always @(posedge clk) if (ram_go) begin
+    if (mem_wstrb[0]) mem[wa][7:0]   <= mem_wdata[7:0];
+    ...
+    ram_rdata <= mem[wa];
+end
+```
+
+Every access gets exactly one wait state: `mem_ready` is a register that goes high the cycle
+after `mem_valid`. Block RAM needs a clock edge to produce its output anyway, so the same
+response works for RAM and the UART, and the bus logic stays a few lines long.
+
+A 4-bit counter holds the CPU in reset for the first 16 clocks after power-up.
+
+### Firmware baked into the bitstream
+
+`$readmemh` fills the RAM at synthesis time, so the firmware becomes part of the bitstream and is
+running the moment the FPGA is configured. The Makefile compiles the C, strips it to a raw binary
+and turns that into one 32-bit hex word per line:
+
+```make
+riscv64-unknown-elf-gcc -march=rv32imc -mabi=ilp32 -Os -ffreestanding -nostdlib \
+    -T link.ld -o fw.elf start.S main.c
+riscv64-unknown-elf-objcopy -O binary fw.elf fw.bin
+od -An -v -tx4 -w4 fw.bin | tr -d ' ' > fw.hex
+```
+
+`od -tx4` reads each 4 bytes as a number in the host's byte order. My PC is little-endian, and
+so is RISC-V, so the words come out right.
+
+The cost of this approach is that changing one line of C means re-running synthesis and place
+and route. In return there's no bootloader to write or debug.
+
+The firmware itself prints a banner and then echoes characters, like part 2 but in C:
+
+```c
+static void putc_(char c) { while (UART_STATUS & TX_BUSY); UART_DATA = c; }
+
+int main(void) {
+    puts_("\r\n[SoC Boot] Tang Nano 9K PicoRV32 Online!\r\n"
+          "Initializing MMIO Peripherals... Done.\r\n> ");
+    for (;;) {
+        while (!(UART_STATUS & RX_FULL));
+        char c = UART_DATA;
+        if (c == '\r') puts_("\r\n> ");
+        else putc_(c);
+    }
+}
+```
+
+Both loops are polling: the CPU spins on the status register until the UART is ready. With
+nothing else to do, that's the simplest correct choice.
+
+### Simulating the whole computer
+
+The testbench runs the real firmware hex in simulation, decodes the TX pin with a copy of the
+UART receiver, prints what it hears and passes when the `>` prompt arrives. That one test covers
+the CPU, the bus, the RAM contents, the linker script and the UART at once. On the board, the
+banner and prompt appear in the terminal.
+
+### Resources
+
+| | LUT4 | Flip-flops | BSRAM | Fmax |
+| :-- | :-- | :-- | :-- | :-- |
+| Part 2, UART echo | 119 | 50 | 0 | 141 MHz |
+| Part 3, CPU + RAM + UART | 4,113 (47%) | 1,327 | 8 of 26 | 51 MHz |
+
+I had estimated 2,000 to 3,500 LUTs. The multiplier, divider and compressed-instruction decoder
+together pushed it past that, but half the chip is still free, and 51 MHz leaves plenty of
+margin over 27 MHz.
+
+<Note type="tip" title="Open the terminal after loading">
+
+Each JTAG load makes the board's USB device disconnect and reconnect, so a terminal opened before
+`make prog` is left holding a dead port. Load first, then open `picocom`.
+
+</Note>
+
+In [part 4](/posts/riscv-soc-4-accelerator/) the CPU gets a piece of custom hardware to talk to,
+and we measure how much faster it is than doing the same work in C.

@@ -1,0 +1,218 @@
+---
+title: "RISC-V SoC, part 4: a hardware accelerator, 46× faster than C"
+description: Accelerators, xorshift random number generators, register interfaces and cycle counting, then a memory-mapped xorshift32 block, a small shell and the measured speedup over software.
+date: 2026-10-20
+cover: ./images/riscv-soc-4.jpg
+coverAlt: A Tang Nano 9K board with a magnified view of its chip showing a CPU next to an accelerator block of XOR gates streaming bits, beside a glass bar where a short bright segment stands for the hardware time
+tags: [fpga, risc-v, verilog, tang-nano-9k]
+series: { name: "RISC-V SoC on a Tang Nano 9K", part: 4 }
+---
+
+A CPU inside an FPGA can have your own hardware sitting right next to it on the bus, which a
+microcontroller can't offer. This part adds one such block, a random number generator
+that runs one step per clock, and measures it against the same algorithm in C on the
+[part 3](/posts/riscv-soc-3-picorv32/) CPU. Code: `phases/p4_accel` and `rtl/accel.v` in the
+[repo](https://github.com/sinhaparth5/tangnano9k-riscv-soc) [@tn9k_soc_repo].
+
+## The basics
+
+### Terms used in this part
+
+| Term | Meaning |
+| :-- | :-- |
+| Accelerator | Hardware built for one job, which the CPU hands that job to. GPUs and crypto engines are big examples. |
+| Offload | Moving work from the CPU to an accelerator. |
+| PRNG | Pseudo-random number generator. A deterministic sequence that looks random. The same seed always gives the same sequence. |
+| Period | How many steps a PRNG takes before its sequence repeats. |
+| Register interface | The few MMIO addresses through which the CPU configures, starts and reads an accelerator. |
+| Polling | Reading a status register in a loop until a flag changes. The alternative is an interrupt. |
+| `rdcycle` | A RISC-V instruction that reads a counter which goes up by one every clock cycle. |
+
+### Xorshift
+
+Xorshift generators come from a 2003 paper by George Marsaglia [@marsaglia2003]. Each step XORs
+the state with a shifted copy of itself, three times. The 32-bit version used here is
+
+```c
+x ^= x << 13;
+x ^= x >> 17;
+x ^= x << 5;
+```
+
+The analysis is linear algebra. Treat the 32-bit state as a vector $\beta$ over
+$\mathrm{GF}(2)$, where addition is XOR. A left shift by $a$ is multiplication by a matrix $L^a$
+and a right shift by $b$ is $R^b$, so one step is
+
+$$
+\beta \mapsto \beta\,T, \qquad T = (I + L^{13})(I + R^{17})(I + L^{5})
+$$
+
+The paper lists the shift triples for which $T$ has order $2^{32}-1$. For those, any non-zero
+seed visits every non-zero 32-bit value before repeating. (13, 17, 5) is one of them. Zero is the
+one value it can never leave, since every shift of 0 is 0, so a seed of 0 gives 0 forever.
+
+Because every step is a linear map over $\mathrm{GF}(2)$, xorshift is no use for cryptography,
+and statistical tests that look for linearity catch it. For a demo it's fine, and three shifts
+and three XORs are an ideal shape for hardware.
+
+### Why hardware wins here
+
+In hardware a shift by a constant costs nothing: it's just wiring bit $i$ to position $i+13$.
+An XOR is one LUT per bit. So a whole xorshift step is a short chain of logic that settles well
+within one 37 ns clock cycle.
+
+On PicoRV32 the same step is a handful of instructions at an average of about 4 cycles each
+[@picorv32], and this build leaves out the optional barrel shifter, so shifts by large amounts
+take extra cycles. Add the loop counter and branch, and software ends up near 50 cycles a step.
+
+### Measuring with `rdcycle`
+
+PicoRV32 includes the RISC-V cycle counter, so timing a piece of code needs no timer peripheral:
+
+```c
+static unsigned cycles(void) { unsigned c; asm volatile("rdcycle %0" : "=r"(c)); return c; }
+```
+
+Read it before, read it after, subtract. The result is in clock cycles, which doesn't depend on
+the clock frequency.
+
+## The experiment
+
+### The accelerator
+
+The block has four registers, at `0x2000_0000` on the bus:
+
+| Offset | Register | Access | Meaning |
+| :-- | :-- | :-- | :-- |
+| `0x00` | `X` | read/write | Seed going in, result coming out |
+| `0x04` | `N` | write | Number of steps to run |
+| `0x08` | `CTRL` | write | Bit 0 starts a run |
+| `0x0C` | `STATUS` | read | Bit 0 is busy |
+
+and the whole thing fits in a screen:
+
+```verilog
+module accel(
+    input clk, input go, input we, input [2:0] reg_i, input [31:0] wdata,
+    output [31:0] rdata
+);
+    reg [31:0] x = 1, n = 0; reg busy = 0;
+    wire [31:0] a = x ^ (x << 13), b = a ^ (a >> 17), c = b ^ (b << 5);
+    assign rdata = reg_i[1] ? {31'b0, busy} : x;      // 0x0C status, else X
+    always @(posedge clk)
+        if (busy) begin
+            if (n == 0) busy <= 0;
+            else begin x <= c; n <= n - 1; end
+        end else if (go && we) case (reg_i)
+            3'd0: x <= wdata;
+            3'd1: n <= wdata;
+            3'd2: busy <= wdata[0];
+        endcase
+endmodule
+```
+
+The wires `a`, `b` and `c` are the three lines of the C version, written as combinational logic.
+While `busy` is set, `x` takes the value of `c` every clock and `n` counts down.
+
+The C driver writes `N`, sets `CTRL`, and polls `STATUS`:
+
+```c
+static void hw_run(unsigned n) {
+    ACC_N = n; ACC_CTRL = 1;
+    while (ACC_STATUS & 1);
+}
+```
+
+### A small shell
+
+The firmware grew into a command shell over the UART, so I could poke at the hardware by hand:
+
+| Command | What it does |
+| :-- | :-- |
+| `help` | lists the commands |
+| `rand [n]` | runs the accelerator `n` steps (default 1) and prints the state |
+| `seed <hex>` | sets the accelerator state |
+| `bench [n]` | times `n` steps in software and in hardware, and checks they match |
+| `peek <addr>` | reads a 32-bit word from any address |
+| `poke <addr> <val>` | writes a 32-bit word to any address |
+| `cycles` | prints the cycle counter |
+
+`peek` and `poke` work on any address, including the accelerator's registers, so
+`peek 20000000` reads `X` directly. They don't check anything, so a `poke` into the RAM holding
+the program can crash it.
+
+Two hardware changes came with the shell. The UART gained a 64-byte receive FIFO, so a pasted
+line isn't lost while the CPU is busy printing. And button S1 now holds the CPU in reset, so
+pressing it reprints the banner without reloading the bitstream.
+
+### Is it correct?
+
+Before timing anything, the hardware's output has to match a known-good implementation. I
+checked it against a separate Python version of the same three lines. From seed 1, five steps
+give `8ef917d1` and ten steps give `add02374`, and the board printed the same values. `bench` also compares the software and hardware results on
+every run.
+
+### Results
+
+Measured on the board with `bench 1000`:
+
+| | Cycles | Per step |
+| :-- | :-- | :-- |
+| Software loop in C | 50,015 | 50 |
+| Accelerator, including MMIO | 1,066 | 1.07 |
+| Speedup | 46×, identical results | |
+
+The accelerator itself takes exactly one cycle per step, so about 66 of the 1,066 cycles are bus
+overhead: three register writes, the polling loop and the final read. That gives a simple model
+for $N$ steps:
+
+$$
+\text{speedup}(N) \approx \frac{50N}{N + 66}
+$$
+
+The model says one step at a time would be slower in hardware than in software, and long runs
+approach 50×. It's fitted to a single measurement, so it's only an estimate. It does show where
+the overhead goes: an accelerator pays off when each call does enough work to cover the cost of
+talking to it.
+
+Resource use barely moved: 4,019 LUT4s (46%), 1,455 flip-flops and 53 MHz Fmax, against 4,113
+LUT4s for part 3. The design also uses 40 of the chip's small RAM16SDP4 memories (14%) and still
+no hardware multipliers.
+
+## Problems I ran into
+
+### The console received its own output
+
+On Linux, ModemManager probes new serial ports by
+sending modem commands, and after each load it went for the board's port. The result was that
+the board saw its own banner and prompts coming back as typed input, so a command like `cycles`
+arrived as `> cycles` and was rejected. The fix is a udev rule telling ModemManager to ignore
+the device:
+
+```sh
+echo 'ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6010", ENV{ID_MM_DEVICE_IGNORE}="1"' \
+  | sudo tee /etc/udev/rules.d/99-tangnano-mm.rules
+```
+
+To make problems like that visible, the shell prints the bytes of an unknown command in hex,
+so stray control characters show up instead of hiding in the terminal.
+
+### Backspace on an empty line was stored
+
+A Backspace on an empty line went into the buffer as a character. The fix is one `if (len)`. The
+simulation test now starts by sending a single Backspace. Two would have cancelled each other out
+and hidden the bug.
+
+### The test passed with a broken design
+
+At one point the testbench had a race on its start
+signal and a string that was cut short by a too-small vector, and it passed anyway. Both were
+bugs in the test, found by deliberately feeding it bad input and checking that it failed.
+
+### A flash write failed its CRC check
+
+After that the board misbehaved at power-up until I
+flashed a known-good image again. Loading into SRAM with `make prog` is the safer default while
+developing.
+
+[Part 5](/posts/riscv-soc-5-hdmi/) adds a screen: an HDMI text console that mirrors the shell.

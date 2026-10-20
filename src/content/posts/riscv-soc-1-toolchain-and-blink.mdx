@@ -1,0 +1,139 @@
+---
+title: "RISC-V SoC, part 1: an open-source toolchain and a blinking counter"
+description: What synthesis, place and route, bitstreams and constraint files are, then the first design on the Tang Nano 9K, a counter that drives six LEDs.
+date: 2026-10-20
+cover: ./images/riscv-soc-1.jpg
+coverAlt: A Tang Nano 9K board with four floating glass panels above it showing Verilog code, a gate-level netlist, a placed and routed grid and a bitstream, joined by a light trail that flows down into the FPGA chip
+tags: [fpga, risc-v, verilog, tang-nano-9k]
+series: { name: "RISC-V SoC on a Tang Nano 9K", part: 1 }
+---
+
+This series follows one project from an LED counter to a small computer: a RISC-V CPU, RAM, a
+serial port, a custom hardware accelerator and an HDMI text console, all inside the Gowin
+GW1NR-9 FPGA on a Tang Nano 9K. Parts 1 to 4 run on the board. Part 5 passes simulation but
+hasn't been tried on a monitor yet. Each part adds one block, explains the ideas it needs, and then
+shows what I built and measured. The code is on GitHub at
+[sinhaparth5/tangnano9k-riscv-soc](https://github.com/sinhaparth5/tangnano9k-riscv-soc)
+[@tn9k_soc_repo], with one folder per part under `phases/`.
+
+If LUTs, flip-flops and IOBs are new to you, read [Understanding FPGA](/posts/understanding-fpga/)
+first. This part covers the step before any of that matters: getting a design from a text file
+onto the chip.
+
+## The basics
+
+### Terms used in this part
+
+| Term | Meaning |
+| :-- | :-- |
+| HDL | Hardware description language, Verilog here. The code describes a circuit, which the tools then build. |
+| Synthesis | Turning HDL into a netlist of the chip's own primitives: LUTs, flip-flops, RAM blocks. |
+| Netlist | A list of primitives and the wires between them, with no physical positions yet. |
+| Place and route | Choosing which physical cell holds each primitive, then which routing wires connect them. |
+| Bitstream | The file that sets every configuration bit on the chip. Gowin's format is `.fs`. |
+| Constraint file | Maps the design's ports to physical pins and sets their I/O standard. Gowin uses `.cst`. |
+| Fmax | The highest clock frequency the routed design can run at before signals arrive too late. |
+
+### The open-source flow
+
+Gowin ships its own IDE, but the GW1NR-9 is also supported by open-source tools. The whole
+project builds with four of them, driven by one Makefile:
+
+```text
+top.v ──Yosys──> netlist.json ──nextpnr──> routed.json ──gowin_pack──> top.fs ──openFPGALoader──> board
+                                   ^
+                            tangnano9k.cst
+```
+
+- Yosys [@yosys] synthesizes the Verilog with its `synth_gowin` command.
+- nextpnr [@nextpnr], in its `himbaechel` build for Gowin parts, places and routes the netlist.
+  The constraint file goes in at this step, because pin locations are a physical decision.
+- `gowin_pack` from Apicula [@apicula] writes the bitstream. Apicula is the project that
+  documented Gowin's bitstream format, which is what makes an open flow possible at all.
+- openFPGALoader sends the bitstream to the board over USB.
+
+All four come in the OSS CAD Suite bundle, so setting up is one download and
+`source ~/oss-cad-suite/environment`.
+
+### SRAM or flash
+
+As the FPGA post explains, the chip's configuration lives in SRAM cells and is lost when the power
+goes off. openFPGALoader can write the bitstream straight into that SRAM (`make prog`), which is
+fast and forgotten at power-off, or into the on-chip flash (`make flash`), which the chip reloads
+at every power-up. During development I use `prog`. It's quicker, and a bad design disappears
+when you unplug the board.
+
+### Clocks and counters
+
+Almost everything in a digital design happens on a clock edge. The Tang Nano 9K has a 27 MHz
+oscillator on pin 52, so a flip-flop clocked from it can change state 27 million times a second.
+
+A counter is the simplest useful sequential circuit: a register that adds one to itself on every
+edge. Bit $k$ of a counter flips every $2^k$ clocks, so it completes a full on-off cycle at
+
+$$
+f_k = \frac{f_\text{clk}}{2^{k+1}}
+$$
+
+That formula is how you get a visible blink out of a 27 MHz clock: pick a high enough bit.
+
+### Active-low LEDs
+
+The six LEDs on the board light up when their pin is driven low, not high. That's called
+active-low, and in Verilog it costs one `~`.
+
+## The experiment
+
+The whole design is six lines:
+
+```verilog
+// Phase 1: 27 MHz / 2^25 counter, top 6 bits drive the active-low LEDs.
+module top(input clk, output [5:0] led);
+    reg [24:0] cnt = 0;
+    always @(posedge clk) cnt <= cnt + 1;
+    assign led = ~cnt[24:19];
+endmodule
+```
+
+and the constraint file says where `clk` and `led` are:
+
+```text
+IO_LOC  "clk"    52;
+IO_PORT "clk"    IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC  "led[0]" 10;
+IO_PORT "led[0]" IO_TYPE=LVCMOS18;
+...
+```
+
+The six LEDs show bits 19 to 24 of a 25-bit counter, so they count upward in binary. With the
+formula above:
+
+| LED | Counter bit | Full blink rate |
+| :-- | :-- | :-- |
+| `led[5]` | 24 | 27 MHz / 2²⁵ ≈ 0.80 Hz |
+| `led[4]` | 23 | ≈ 1.6 Hz |
+| `led[0]` | 19 | 27 MHz / 2²⁰ ≈ 26 Hz |
+
+The slowest LED changes about every 0.6 seconds and the fastest one flickers.
+
+Building it is `make PHASE=p1_blink` and loading it is `make PHASE=p1_blink prog`. On the board,
+the LEDs count in binary as expected.
+
+### What the tools made of it
+
+nextpnr reports 33 LUT4s for the design, out of 8,640 on the chip, and no block RAM. The 25
+flip-flops hold the counter, and the `+ 1` becomes an adder on the carry chain. The reported Fmax
+is 239 MHz, far above 27 MHz.
+
+<Note title="About that Fmax number">
+
+I didn't give nextpnr a clock constraint, so it routed against its default 12 MHz target and
+then reported how fast the result could go. Every design in this series clears 27 MHz by a wide
+margin, so I left it that way. On a design that's close to its limit, you'd tell the tool the
+real clock frequency so it works harder on the critical paths.
+
+</Note>
+
+This part is mostly a check that the toolchain works end to end. Once the LEDs count, every later
+part is the same `make` command with a different `PHASE`. [Part 2](/posts/riscv-soc-2-uart/)
+adds a serial port so the board can talk to a PC.

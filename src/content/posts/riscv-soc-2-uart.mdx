@@ -1,0 +1,166 @@
+---
+title: "RISC-V SoC, part 2: a UART from scratch"
+description: Baud rates, start and stop bits, mid-bit sampling and synchronizers, then a hand-written UART transmitter and receiver that echo typed characters back to the PC.
+date: 2026-10-20
+cover: ./images/riscv-soc-2.jpg
+coverAlt: A Tang Nano 9K board cabled to a laptop terminal, with a glowing serial waveform between them marked at each bit's midpoint and a magnified inset of a two flip-flop synchronizer
+tags: [fpga, risc-v, verilog, uart, tang-nano-9k]
+series: { name: "RISC-V SoC on a Tang Nano 9K", part: 2 }
+---
+
+A CPU with no way to talk to the outside is hard to debug, so before adding one, the board needs
+a serial port. This part builds a UART in Verilog, about 40 lines for both directions, and tests
+it in simulation before it touches the board. Code: `phases/p2_uart` and `rtl/uart_*.v` in the
+[repo](https://github.com/sinhaparth5/tangnano9k-riscv-soc) [@tn9k_soc_repo].
+
+## The basics
+
+### Terms used in this part
+
+| Term | Meaning |
+| :-- | :-- |
+| UART | Universal asynchronous receiver-transmitter. Sends bytes one bit at a time over a single wire per direction. |
+| Asynchronous | No clock wire. Both ends agree on a bit rate in advance and each uses its own clock to time it. |
+| Baud rate | Symbols per second on the line. For a UART one symbol is one bit, so 115200 baud is 115,200 bits/s. |
+| 8N1 | 8 data bits, no parity bit, 1 stop bit. The most common UART frame format. |
+| Start / stop bit | The 0 that marks the start of a frame and the 1 that ends it. |
+| Metastability | A flip-flop sampling an input exactly as it changes can sit between 0 and 1 for a while. |
+| Synchronizer | Two flip-flops in a row that give a metastable value time to settle before logic uses it. |
+| Testbench | Verilog that drives a design in simulation and checks its outputs. It never goes on the chip. |
+
+### What a byte looks like on the wire
+
+The line idles high. To send a byte, the transmitter pulls it low for one bit time (the start
+bit), sends the 8 data bits least significant bit first, then holds it high for one bit time
+(the stop bit). Sending the letter `A`, `0x41` or `01000001`, looks like this:
+
+```text
+idle  start  b0  b1  b2  b3  b4  b5  b6  b7  stop  idle
+‾‾‾‾‾|_____|‾‾‾|___|___|___|___|___|‾‾‾|___|‾‾‾‾‾‾‾‾‾‾‾‾
+           1   0   0   0   0   0   1   0
+```
+
+That's 10 bit times for 8 bits of data, so 115200 baud carries at most 11,520 bytes per second.
+
+### Timing the bits with a divider
+
+With no clock on the wire, each side counts its own clock cycles to know where a bit begins. On
+a 27 MHz clock one bit at 115200 baud lasts
+
+$$
+\frac{27\,000\,000}{115\,200} = 234.375 \text{ clocks}
+$$
+
+The design rounds that to 234, which gives an actual rate of 115,385 baud, 0.16% fast. That's
+fine, because the receiver only has to stay within half a bit of the sender by the last bit it
+samples. The stop bit is sampled 9.5 bit times after the falling edge of the start bit, so the
+two clocks may disagree by about $0.5 / 9.5 \approx 5\%$ in total before bits get misread.
+
+### Sampling in the middle
+
+The receiver waits for the falling edge of a start bit, then waits half a bit and samples. If the
+line is still low it was a real start bit, and every later sample happens one full bit time
+apart, which lands in the middle of each bit where the signal is most stable.
+
+Many UART chips sample 16 times per bit and take a majority vote. That helps when the clock is
+only a few times faster than the baud rate. Here there are 234 clocks per bit, so one sample at
+the midpoint is already accurate to well under 1% of a bit.
+
+### Synchronizing an outside signal
+
+The RX pin changes whenever the PC sends something, with no relation to the FPGA's clock. If a
+flip-flop samples it at the exact moment it changes, the flip-flop can go metastable, neither 0
+nor 1 for a short time. The standard fix is to pass the pin through two flip-flops before using
+it. The first may go metastable, but it has a whole clock period to settle before the second
+samples it. Every asynchronous input in this project goes through one of these.
+
+## The experiment
+
+### The transmitter
+
+The transmitter loads a 10-bit shift register with `{stop, data, start}` and shifts it out, one
+bit every 234 clocks. The TX pin is just bit 0 of the register.
+
+```verilog
+module uart_tx #(parameter CLKS = 234) (
+    input clk, input start, input [7:0] data,
+    output tx, output busy
+);
+    reg [9:0] sh = 10'h3ff;           // {stop, data, start}, LSB first
+    reg [3:0] n = 0;                  // bits left
+    reg [$clog2(CLKS)-1:0] c = 0;
+    assign tx = sh[0];
+    assign busy = n != 0;
+    always @(posedge clk)
+        if (!busy) begin
+            if (start) begin sh <= {1'b1, data, 1'b0}; n <= 10; c <= CLKS-1; end
+        end else if (c == 0) begin
+            sh <= {1'b1, sh[9:1]}; n <= n - 1; c <= CLKS-1;
+        end else c <= c - 1;
+endmodule
+```
+
+Shifting in a 1 from the top means the line is left high, which is the idle state, once the
+frame is out.
+
+### The receiver
+
+The receiver is a small state machine with a 2-flip-flop synchronizer on the input:
+
+```verilog
+s <= {s[0], rx};                                            // synchronizer
+if (n == 0) begin
+    if (!s[1]) begin n <= 1; c <= CLKS/2 - 1; end           // falling edge: wait to mid start bit
+end else if (c != 0) c <= c - 1;
+else begin
+    c <= CLKS - 1;
+    if (n == 1) begin if (s[1]) n <= 0; else n <= 2; end    // false start -> idle
+    else if (n <= 9) begin data <= {s[1], data[7:1]}; n <= n + 1; end
+    else begin valid <= s[1]; n <= 0; end                   // stop bit must be 1
+end
+```
+
+It rejects two kinds of bad frame. A start bit that has gone high again by its midpoint was a
+glitch, so the receiver goes back to idle. A stop bit that reads 0 is a framing error, and the
+byte is dropped instead of being reported as `valid`.
+
+### Testing in simulation first
+
+The testbench wires the transmitter's output straight into the receiver and sends four bytes:
+`0x55` (alternating bits), `0xA3`, `0x00` and `0xFF` (all one value, so any off-by-one in the bit
+count shows up). It checks each one comes back unchanged and prints `PASS` or `FAIL`:
+
+```sh
+make PHASE=p2_uart sim     # Icarus Verilog
+```
+
+Simulation is much faster to iterate on than the board. A failed run shows the exact cycle where
+things went wrong, while on the board you only see a terminal that prints nothing.
+
+### The echo on the board
+
+The top level connects receiver to transmitter, so every byte that arrives is sent straight back,
+and the six LEDs show the low bits of the last byte received:
+
+```verilog
+uart_rx rx(.clk(clk), .rx(uart_rx), .valid(v), .data(d));
+// ponytail: drops a byte if it arrives while tx is busy; fine for typing, add FIFO if pasting bulk
+uart_tx tx(.clk(clk), .start(v & ~busy), .data(d), .tx(uart_tx), .busy(busy));
+```
+
+The comment marks a known shortcut: there's no buffer, so a byte that arrives while the previous
+echo is still going out is lost. That's fine for typing. A 64-byte receive FIFO gets added in
+part 4, when the CPU can be busy for a while.
+
+The board's USB chip, a BL702, acts as the programmer and also as a USB-to-serial bridge wired to
+pins 17 and 18 [@sipeed_tangnano9k]. It shows up on Linux as two serial ports, and the UART is usually the second:
+
+```sh
+make PHASE=p2_uart prog
+picocom -b 115200 /dev/ttyUSB1
+```
+
+Typed characters come back intact, and the LEDs change with each key.
+
+The design uses 119 LUT4s and 50 flip-flops, with an Fmax of 141 MHz. In
+[part 3](/posts/riscv-soc-3-picorv32/) the CPU takes over this UART, and the echo moves into C.

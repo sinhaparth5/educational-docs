@@ -143,7 +143,8 @@ export default defineConfig({
 		mdx(),
 		react(),
 		sitemap({
-			filter: (page) => !page.includes('/drafts/'),
+			// noindex pages stay out too
+			filter: (page) => !/\/(drafts|search)\//.test(page),
 		}),
 		search(), // before precompress so its files get compressed too
 		precompress(),
