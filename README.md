@@ -1,43 +1,49 @@
-# Astro Starter Kit: Minimal
+# educational-docs
+
+Notes on math and computing, with interactive graphs, published at [edu.parthsinha.com](https://edu.parthsinha.com).
+
+It is a static site built with [Astro](https://astro.build). Posts are written in MDX and can use KaTeX math, IEEE-style citations and interactive visualizations. The site also has Pagefind search, RSS, Giscus comments and generated social images.
+
+## Development
+
+You need [Bun](https://bun.sh) and Node 22.22 or newer.
 
 ```sh
-npm create astro@latest -- --template minimal
+bun install
+bun run dev        # http://localhost:4321
+bun run check      # type and content checks
+bun run build      # static site in dist/
+bun run preview    # serve dist/ (search only works here, not under dev)
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+## Writing a post
 
-## 🚀 Project Structure
-
-Inside of your Astro project, you'll see the following folders and files:
-
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
+```sh
+bun run new "Post title"
 ```
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+This creates `src/content/posts/post-title.mdx` as a draft. Drafts appear under `bun run dev` but are left out of a build, so set `draft: false` (or remove the line) to publish.
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+Frontmatter fields:
 
-Any static assets, like images, can be placed in the `public/` directory.
+| Field | Required | Notes |
+| :-- | :-- | :-- |
+| `title`, `description`, `date` | yes | |
+| `tags` | no | list of strings |
+| `featured` | no | shown in the home page Featured section |
+| `updated` | no | date of the last edit |
+| `cover`, `coverAlt` | no | 1200×630 image path relative to the post, used as the social preview |
+| `series` | no | `{ name, part }` for multi-part posts |
 
-## 🧞 Commands
+Cite sources with `[@key]`. Each key needs an entry in `src/content/references/references.bib`, and the post gets an IEEE-style numbered reference list at the end.
 
-All commands are run from the root of the project, from a terminal:
+You can use these components in any post without importing them: `<Theorem>`, `<Proof>`, `<Note>`, `<Sidenote>` and `<DocCard>`.
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
+## Deployment
 
-## 👀 Want to learn more?
+The Docker image builds the site and serves it with Caddy on port 8080 as a non-root user. It serves the pre-compressed brotli and gzip files written at build time. HTTPS is handled by the reverse proxy on the host.
 
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+```sh
+docker build -t edu .
+docker run -d --name edu -p 127.0.0.1:8080:8080 --read-only --cap-drop ALL --tmpfs /tmp edu
+```
