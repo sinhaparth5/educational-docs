@@ -1,0 +1,22 @@
+# Only what the build needs goes into the build context.
+# Generated / installed in the image instead:
+node_modules
+dist
+.astro
+
+# Not needed to build the site
+.git
+.github
+.vscode
+.idea
+.claude
+README.md
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Never send secrets or local junk to the daemon
+.env
+.env.*
+*.log
+.DS_Store

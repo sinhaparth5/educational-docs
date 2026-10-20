@@ -1,0 +1,46 @@
+# Serves the built site on :8080 as a non-root user.
+# TLS is left to the reverse proxy on the host, so automatic HTTPS is off here.
+{
+	admin off
+	auto_https off
+	persist_config off
+
+	# Caddy's own runtime logs, structured
+	log {
+		output stderr
+		format json
+	}
+}
+
+:8080 {
+	root * /srv/www
+
+	# One JSON line per request: method, uri, status, size, duration, user agent…
+	log {
+		output stdout
+		format json
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options SAMEORIGIN
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# Hashed build assets never change, so cache them for a year
+	header /_astro/* Cache-Control "public, max-age=31536000, immutable"
+
+	# Serve the .br / .gz files written at build time instead of compressing per request
+	file_server {
+		precompressed br gzip
+	}
+
+	handle_errors 404 {
+		rewrite * /404.html
+		file_server {
+			precompressed br gzip
+		}
+	}
+}
