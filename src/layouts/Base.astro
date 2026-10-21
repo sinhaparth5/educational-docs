@@ -4,6 +4,7 @@ import '@/styles/global.css';
 import styles from './Base.module.css';
 import Header from '@/components/layout/header/Header.astro';
 import Footer from '@/components/layout/footer/Footer.astro';
+import Consent from '@/components/layout/consent/Consent.astro';
 import { SITE } from '@/lib/site';
 // Same files the @fontsource CSS points at, so the preload is reused, not downloaded twice
 import geistLatin from '@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url';
@@ -26,7 +27,7 @@ const {
 	type = 'website',
 	noindex = false,
 } = Astro.props;
-const { analytics } = SITE;
+const { analytics, google } = SITE;
 const fullTitle = title ? `${title} | ${SITE.title}` : SITE.title;
 const url = new URL(Astro.url.pathname, Astro.site);
 const image = new URL(ogImage, Astro.site);
@@ -73,6 +74,56 @@ const xHandle = `@${SITE.socials.x.split('/').pop()}`;
 		<meta name="twitter:image" content={image} />
 		<meta name="twitter:image:alt" content={ogImageAlt} />
 		<slot name="head" />
+		<script is:inline define:vars={google}>
+			// Nothing from Google loads until the visitor accepts in the cookie banner (GDPR/ePrivacy).
+			// A choice is kept 6 months, then asked again; Global Privacy Control counts as a refusal.
+			const MAX_AGE = 1000 * 60 * 60 * 24 * 182;
+			window.consent = {
+				get() {
+					try {
+						const c = JSON.parse(localStorage.getItem('consent'));
+						if (c && Date.now() - c.at < MAX_AGE) return c.choice;
+					} catch {}
+					return navigator.globalPrivacyControl ? 'denied' : null;
+				},
+				set(choice) {
+					try {
+						localStorage.setItem('consent', JSON.stringify({ choice, at: Date.now() }));
+					} catch {}
+				},
+			};
+			window.dataLayer = window.dataLayer || [];
+			window.gtag = function () {
+				dataLayer.push(arguments);
+			};
+			window.loadGoogle = () => {
+				if (window.googleLoaded) return;
+				window.googleLoaded = true;
+				// Analytics only: ad storage and Google signals stay off even after consent
+				gtag('consent', 'default', {
+					ad_storage: 'denied',
+					ad_user_data: 'denied',
+					ad_personalization: 'denied',
+					analytics_storage: 'granted',
+				});
+				gtag('js', new Date());
+				gtag('config', gaId, {
+					allow_google_signals: false,
+					allow_ad_personalization_signals: false,
+				});
+				dataLayer.push({ 'gtm.start': Date.now(), event: 'gtm.js' });
+				for (const src of [
+					`https://www.googletagmanager.com/gtag/js?id=${gaId}`,
+					`https://www.googletagmanager.com/gtm.js?id=${gtmId}`,
+				]) {
+					const s = document.createElement('script');
+					s.async = true;
+					s.src = src;
+					document.head.append(s);
+				}
+			};
+			if (consent.get() === 'granted') loadGoogle();
+		</script>
 		{
 			analytics.websiteId && (
 				<script is:inline defer src={analytics.src} data-website-id={analytics.websiteId} />
@@ -93,6 +144,7 @@ const xHandle = `@${SITE.socials.x.split('/').pop()}`;
 			<slot />
 		</main>
 		<Footer />
+		<Consent />
 	</body>
 </html>
 

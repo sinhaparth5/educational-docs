@@ -7,7 +7,7 @@ export const SITE = {
 	recentPosts: 4,
 	// Links shown on the home page; leave one empty to hide it
 	socials: {
-		email: '', // e.g. 'you@example.com'
+		email: 'parth@devflowfix.com',
 		website: 'https://parthsinha.com',
 		linkedin: 'https://www.linkedin.com/in/parth-sinha18',
 		x: 'https://x.com/parth_sinha18',
@@ -25,6 +25,11 @@ export const SITE = {
 	analytics: {
 		src: '', // e.g. 'https://stats.parthsinha.com/script.js'
 		websiteId: '',
+	},
+	// Google Analytics + Tag Manager, held at consent "denied" until the cookie banner is accepted
+	google: {
+		gaId: 'G-3VKGFDNT00',
+		gtmId: 'GTM-P2F5PKZJ',
 	},
 };
 

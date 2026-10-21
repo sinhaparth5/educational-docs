@@ -1,0 +1,55 @@
+---
+import styles from './Consent.module.css';
+---
+
+<div class={styles.banner} role="region" aria-label="Cookie consent" data-consent hidden>
+	<p class={styles.text}>
+		Can I use Google Analytics cookies to count which notes get read? Nothing is loaded or stored
+		unless you accept, and you can change your mind any time from the footer. <a href="/privacy/"
+			>Privacy policy</a
+		>
+	</p>
+	<div class={styles.actions}>
+		<button type="button" class={styles.button} data-choice="denied">Reject</button>
+		<button type="button" class={styles.button} data-choice="granted">Accept</button>
+	</div>
+</div>
+
+<script>
+	type Choice = 'granted' | 'denied';
+	const { consent, loadGoogle } = window as unknown as {
+		consent: { get(): Choice | null; set(c: Choice): void };
+		loadGoogle(): void;
+	};
+
+	const banner = document.querySelector<HTMLElement>('[data-consent]')!;
+	banner.hidden = consent.get() !== null;
+
+	/** GA cookies sit on the registrable domain (.parthsinha.com) or the bare host */
+	const clearGoogleCookies = () => {
+		const host = location.hostname;
+		const domains = ['', host, `.${host.split('.').slice(-2).join('.')}`];
+		for (const name of document.cookie.split('; ').map((c) => c.split('=')[0])) {
+			if (!/^(_ga|_gid|_gat)/.test(name)) continue;
+			for (const d of domains)
+				document.cookie = `${name}=; Max-Age=0; path=/${d && `; domain=${d}`}`;
+		}
+	};
+
+	banner.addEventListener('click', (e) => {
+		const choice = (e.target as HTMLElement).closest<HTMLElement>('[data-choice]')?.dataset
+			.choice as Choice | undefined;
+		if (!choice) return;
+		consent.set(choice);
+		banner.hidden = true;
+		if (choice === 'granted') return loadGoogle();
+		clearGoogleCookies();
+		// Google's scripts are already running on this page, so reload to unload them
+		if ((window as { googleLoaded?: boolean }).googleLoaded) location.reload();
+	});
+
+	document.querySelector('[data-consent-open]')?.addEventListener('click', () => {
+		banner.hidden = false;
+		banner.querySelector('button')?.focus();
+	});
+</script>

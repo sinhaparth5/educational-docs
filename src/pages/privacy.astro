@@ -1,0 +1,70 @@
+---
+import Base from '@/layouts/Base.astro';
+import { SITE } from '@/lib/site';
+import styles from '@/styles/pages/listing.module.css';
+
+const { email, github } = SITE.socials;
+const contact = email ? `mailto:${email}` : github;
+---
+
+<Base title="Privacy" description="What this site collects, why, and your rights.">
+	<h1 class={styles.heading}>Privacy policy</h1>
+	<p class={styles.sub}>Last updated 21 October 2026</p>
+	<div class="prose">
+		<p>
+			This site is run by {SITE.author}, who is the data controller for it. For any privacy question
+			or request, <a href={contact}>get in touch</a>.
+		</p>
+
+		<h2>What is collected</h2>
+		<p>
+			<strong>Server logs.</strong> Like any web server, this one records each request: IP address,
+			page requested, time, browser user agent and response status. These logs are used only to keep
+			the site running and secure (legitimate interest, GDPR Art. 6(1)(f)) and are deleted
+			regularly.
+		</p>
+		<p>
+			<strong>Google Analytics and Google Tag Manager, only if you accept.</strong> If you accept
+			in the cookie banner, Google Analytics sets cookies (<code>_ga</code>, <code>_ga_*</code>)
+			that count page views, rough location, device type and how you reached the site. This is
+			based on your consent (GDPR Art. 6(1)(a)). Advertising features and Google signals are turned
+			off, and nothing is used for ads. Google LLC processes this data and may transfer it to the
+			US under the EU–US Data Privacy Framework. Analytics data is kept for up to 14 months. If you
+			reject or do nothing, no Google script is loaded.
+		</p>
+		<p>
+			<strong>Comments.</strong> Post comments use <a href="https://giscus.app">giscus</a>, which
+			stores comments in GitHub Discussions. Loading a post that has comments contacts giscus and
+			GitHub. If you sign in to comment, GitHub's <a
+				href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement"
+				>privacy statement</a
+			> applies to what you post.
+		</p>
+		<p>
+			<strong>Your browser.</strong> The site saves your theme and your cookie choice in your
+			browser's local storage. They never leave your device. Fonts are served from this site, not
+			from a third party.
+		</p>
+
+		<h2>Your choices</h2>
+		<p>
+			You can change or withdraw consent at any time with the <em>Cookies</em> link in the footer.
+			Withdrawing deletes the Google Analytics cookies. Your choice is remembered for 6 months, after
+			which you will be asked again. A <a href="https://globalprivacycontrol.org"
+				>Global Privacy Control</a
+			> signal from your browser counts as a refusal.
+		</p>
+		<p>No personal data is sold, or shared for cross-context behavioural advertising.</p>
+
+		<h2>Your rights</h2>
+		<p>
+			Depending on where you live (for example under the GDPR, UK GDPR, California's CCPA/CPRA, or
+			India's DPDP Act), you can ask to access, correct, delete or export your personal data, object
+			to or restrict its processing, and withdraw consent. You also have the right to complain to
+			your local data protection authority. Requests are answered within one month.
+		</p>
+
+		<h2>Changes</h2>
+		<p>If this policy changes, the date at the top is updated.</p>
+	</div>
+</Base>
