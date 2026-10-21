@@ -1,7 +1,14 @@
 # syntax=docker/dockerfile:1
 
 # ---- Build: Node runs Astro, Bun installs deps from bun.lock --------------
-FROM node:24-bookworm-slim AS build
+FROM node:24.22.0-bookworm-slim AS build
+# ponytail: 24.22.1 (Oct 2026 security release) has no Docker image yet, so swap in
+# the official binary, checksum from nodejs.org SHASUMS256.txt. amd64 only, like CI.
+# Drop this and use node:24.22.1-bookworm-slim once that tag has images.
+ADD --checksum=sha256:eb6728e77c576a35162c122c45ccadf224d89ff00abc8dae46cc2897c6002d7c \
+	https://nodejs.org/dist/v24.22.1/node-v24.22.1-linux-x64.tar.gz /tmp/node.tar.gz
+RUN tar -xzf /tmp/node.tar.gz -C /usr/local/bin --strip-components=2 node-v24.22.1-linux-x64/bin/node \
+	&& rm /tmp/node.tar.gz && node -v | grep -qx v24.22.1
 COPY --from=oven/bun:1.4.3 /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /app
 

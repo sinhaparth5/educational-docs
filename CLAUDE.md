@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Static Astro 7 blog of math/computing notes at https://edu.parthsinha.com. Bun installs dependencies, while Astro itself runs on Node (>= 22.22). Start the dev server in the background with `bunx astro dev --background` and manage it with `bunx astro dev stop|status|logs`. Astro's docs are at https://docs.astro.build.
+Static Astro 7 blog of math/computing notes at https://edu.parthsinha.com. Bun installs dependencies, while Astro itself runs on Node (>= 22.23.4, 24.22.1 or 26.12.1, the October 2026 security releases). Start the dev server in the background with `bunx astro dev --background` and manage it with `bunx astro dev stop|status|logs`. Astro's docs are at https://docs.astro.build.
 
 ## Commands
 
