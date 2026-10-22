@@ -15,7 +15,7 @@ jobs:
       - run: bun run check
       - run: bun run build
 
-  # Publishes ghcr.io/<owner>/<repo>:latest and :<sha> once check passes on master
+  # Publishes ghcr.io/<owner>/<repo>:latest and :<short sha> once check passes on master
   image:
     needs: check
     if: github.event_name == 'push'
@@ -23,7 +23,11 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
+      - id: tag
+        run: echo "tag=${GITHUB_SHA::6}" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -37,7 +41,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ghcr.io/${{ github.repository }}:${{ steps.tag.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -47,23 +51,26 @@ jobs:
     steps:
       - uses: appleboy/ssh-action@v1.0.3
         env:
-          IMAGE_NAME: ghcr.io/${{ github.repository }}
+          # Deploy the exact build, so rolling back is re-running an older tag
+          IMAGE: ghcr.io/${{ github.repository }}:${{ needs.image.outputs.tag }}
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: IMAGE_NAME,GHCR_USERNAME,GHCR_TOKEN
+          envs: IMAGE,GHCR_USERNAME,GHCR_TOKEN
           script: |
             set -e
             printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-            docker pull "${IMAGE_NAME}:latest"
+            docker pull "$IMAGE"
             docker stop educational-docs || true
             docker rm educational-docs || true
             docker run -d \
               --name educational-docs \
               --restart unless-stopped \
+              --read-only --tmpfs /tmp \
+              --cap-drop ALL --security-opt no-new-privileges \
               -p 127.0.0.1:18086:8080 \
-              "${IMAGE_NAME}:latest"
+              "$IMAGE"
             docker image prune -f

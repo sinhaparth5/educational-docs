@@ -28,7 +28,7 @@ There are no tests. CI (`.github/workflows/ci.yml`) runs `check` and `build`.
 - **Social images:** a post with `cover` (1200×630, relative path, via `image()`) uses it as its OG image through `getImage`. Posts without a cover get a satori/resvg card from `src/pages/og/[...slug].png.ts`. Other pages use `public/og-home.jpg`, the default set in `src/layouts/Base.astro`.
 - **Viz islands** (`src/components/viz/`) are React components (Mafs, JSXGraph, three) loaded with `client:visible`. three is split into its own chunk.
 - **Comments:** Giscus maps threads by pathname, so renaming a post's file orphans its comments.
-- **Deploy:** the multi-stage `Dockerfile` builds with Node+Bun and ships only Caddy (`docker/Caddyfile`), running as non-root on :8080 with no TLS. The host's reverse proxy handles HTTPS.
+- **Deploy:** the multi-stage `Dockerfile` builds with Node+Bun and ships only Caddy (`docker/Caddyfile`), running as non-root on :8080 with no TLS. The host's reverse proxy handles HTTPS. CI tags each image with the first 6 characters of the commit SHA and deploys that tag read-only with all capabilities dropped, so a rollback means re-running an older tag. The CSP lives in `docker/Caddyfile`, so a new third-party embed needs an entry there.
 
 ## Conventions
 
