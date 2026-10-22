@@ -73,4 +73,6 @@ jobs:
               --cap-drop ALL --security-opt no-new-privileges \
               -p 127.0.0.1:18086:8080 \
               "$IMAGE"
+            # Keep only the running image; a rollback re-pulls its tag from ghcr
+            docker images "${IMAGE%:*}" --format '{{.Repository}}:{{.Tag}}' | grep -vxF "$IMAGE" | xargs -r docker rmi || true
             docker image prune -f
