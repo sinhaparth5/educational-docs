@@ -4,9 +4,6 @@ on:
   push:
     branches: [master]
   pull_request:
-  # Daily Patchwatch heartbeat so the service never shows as stale
-  schedule:
-    - cron: '0 6 * * *'
 
 jobs:
   check:
@@ -83,22 +80,3 @@ jobs:
             # Keep only the running image; a rollback re-pulls its tag from ghcr
             docker images "${IMAGE%:*}" --format '{{.Repository}}:{{.Tag}}' | grep -vxF "$IMAGE" | xargs -r docker rmi || true
             docker image prune -f
-
-  # Tells Patchwatch which versions the deployed site was built with (also runs daily)
-  patchwatch:
-    needs: deploy
-    if: ${{ !cancelled() && (needs.deploy.result == 'success' || github.event_name == 'schedule') }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      # Same Node the Dockerfile builds with, so the reported runtime is the real one
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24.22.1
-      - run: node scripts/patchwatch.mjs
-        env:
-          PATCHWATCH_URL: ${{ secrets.PATCHWATCH_URL }}
-          PATCHWATCH_TOKEN: ${{ secrets.PATCHWATCH_TOKEN }}
-          PATCHWATCH_SOURCE: .
