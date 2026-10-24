@@ -13,6 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Runner's preinstalled Node can lag behind Astro's minimum; match the Dockerfile
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.1
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run check
