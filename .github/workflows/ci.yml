@@ -101,3 +101,4 @@ jobs:
         env:
           PATCHWATCH_URL: ${{ secrets.PATCHWATCH_URL }}
           PATCHWATCH_TOKEN: ${{ secrets.PATCHWATCH_TOKEN }}
+          PATCHWATCH_SOURCE: .
