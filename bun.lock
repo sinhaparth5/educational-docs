@@ -16,6 +16,7 @@
         "@resvg/resvg-js": "^2.6.2",
         "@tabler/icons": "^3.49.0",
         "astro": "^7.4.2",
+        "fflate": "^0.8.3",
         "jsxgraph": "^1.14.1",
         "katex": "^0.19.1",
         "mafs": "^0.21.0",
