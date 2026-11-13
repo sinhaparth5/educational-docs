@@ -3,7 +3,10 @@ title: Galois fields for the AES
 description: Detailed notes on Christof Paar's lecture introducing finite fields. Groups, fields, prime fields GF(p), and the extension field GF(2⁸) that AES does its byte arithmetic in, with every example worked by hand.
 date: 2026-11-13
 featured: true
+cover: ./images/galois-fields.jpg
+coverAlt: Soft 3D diagram on graph paper showing the byte 0x57 as eight bit tiles and the polynomial x⁶ + x⁴ + x² + x + 1, a teal dial labeled GF(2⁸) mod x⁸ + x⁴ + x³ + x + 1, and small cards for GF(7), xtime, an irreducible polynomial and the inverse 0x53⁻¹ = 0xCA
 tags: [cryptography, aes, math, finite-fields]
+series: { name: "AES with Christof Paar", part: 1 }
 ---
 
 AES works on bytes, and every layer except ShiftRows does some kind of arithmetic on them.

@@ -1,0 +1,468 @@
+---
+title: "AES, layer by layer"
+description: Detailed notes on Christof Paar's lecture on the Advanced Encryption Standard. The state, the round structure, SubBytes, ShiftRows, MixColumns, key addition and the key schedule, with a full round traced byte by byte against the official test vector.
+date: 2026-11-13
+featured: true
+cover: ./images/aes-layers.jpg
+coverAlt: Soft 3D diagram on a drafting table showing one AES round as 4×4 grids of hex-byte keys passing through SubBytes, ShiftRows, MixColumns and AddRoundKey between plaintext and ciphertext strips, with cards for the S-box, the MixColumns matrix, the key schedule and the round coefficients
+tags: [cryptography, aes, math, finite-fields]
+series: { name: "AES with Christof Paar", part: 2 }
+---
+
+The [previous post](/posts/galois-fields-for-aes/) built the arithmetic: bytes are elements of
+$GF(2^8)$, addition is XOR, and multiplication is polynomial multiplication reduced modulo
+$x^8 + x^4 + x^3 + x + 1$. This one puts that arithmetic to work inside the cipher.
+
+These are my notes on Christof Paar's lecture on AES [@paar_lecture8]. As before, the lecture
+follows his textbook with Jan Pelzl [@paar2010], chapter 4 this time, and I use the book's names
+for the layers. Every example below comes from a small Python implementation that I checked
+against the test vectors in the AES standard itself [@fips197]. The code is at the end of the
+post.
+
+## Where AES came from
+
+By the late 1990s DES was showing its age. Its 56-bit key could be searched exhaustively with
+special-purpose hardware, and triple DES, the usual workaround, is slow in software. In 1997 the
+US National Institute of Standards and Technology (NIST) announced an open competition for a
+replacement. The requirements were a block cipher with a 128-bit block, support for 128-, 192-
+and 256-bit keys, security at least comparable to the other submissions, and good efficiency in
+both software and hardware.
+
+Fifteen algorithms were submitted, and in 1999 NIST narrowed them to five finalists: MARS, RC6,
+Rijndael, Serpent and Twofish. In October 2000 Rijndael was announced as the winner, and it was
+published as the standard FIPS 197 in 2001. Its designers are two Belgian cryptographers, Joan
+Daemen and Vincent Rijmen.
+
+One detail is easy to miss. Rijndael itself supports block sizes of 128, 192 and 256 bits, but AES
+fixes the block at 128 bits. Only the key length varies.
+
+## AES at a glance
+
+| Key length | Rounds |
+| ---------- | ------ |
+| 128 bits   | 10     |
+| 192 bits   | 12     |
+| 256 bits   | 14     |
+
+The block is always 128 bits, which is 16 bytes. The rest of this post uses AES-128, where the key
+is also 16 bytes and there are 10 rounds. The other two variants change only the number of rounds
+and the key schedule.
+
+AES is not a Feistel cipher. In DES, each round processes only half of the block, and the halves
+swap places. AES processes the whole 128-bit block in every round, which is one reason it gets
+away with fewer rounds than DES's 16.
+
+## The state
+
+AES treats the 16 bytes of the block as a 4×4 matrix of bytes called the state. The bytes fill it
+column by column:
+
+| | col 0 | col 1 | col 2 | col 3 |
+| ----- | ------- | ------- | -------- | -------- |
+| row 0 | $A_0$ | $A_4$ | $A_8$  | $A_{12}$ |
+| row 1 | $A_1$ | $A_5$ | $A_9$  | $A_{13}$ |
+| row 2 | $A_2$ | $A_6$ | $A_{10}$ | $A_{14}$ |
+| row 3 | $A_3$ | $A_7$ | $A_{11}$ | $A_{15}$ |
+
+Byte $A_0$ is the first byte of the input and $A_{15}$ the last. The layout matters because the
+layers act on different parts of the matrix. SubBytes works on single bytes, ShiftRows works on
+rows, and MixColumns works on columns.
+
+## The round structure
+
+Each round is made of three layers, and every layer touches all 128 bits:
+
+1. **Key addition**, which XORs a 128-bit round key into the state.
+2. **Byte substitution**, which sends each byte through the S-box. This is the only nonlinear
+   step, and it supplies confusion.
+3. **Diffusion**, which is two sublayers. ShiftRows permutes bytes across columns, and MixColumns
+   mixes the four bytes inside each column.
+
+Encryption with AES-128 runs like this:
+
+```text
+state = plaintext XOR k0                      # key whitening before round 1
+
+for round 1..9:
+    state = SubBytes(state)
+    state = ShiftRows(state)
+    state = MixColumns(state)
+    state = state XOR k_round
+
+round 10:
+    state = SubBytes(state)
+    state = ShiftRows(state)                  # no MixColumns in the last round
+    state = state XOR k10
+
+ciphertext = state
+```
+
+A 10-round cipher therefore uses 11 round keys, $k_0$ through $k_{10}$. The extra key addition at
+the start matters, because without it the first SubBytes and ShiftRows would operate on the
+plaintext with no secret involved, and an attacker could simply undo them. Dropping MixColumns in
+the last round makes encryption and decryption structurally similar. It doesn't change the
+security, because a final MixColumns could be peeled off by anyone who knows the matrix.
+
+## Byte substitution
+
+The S-box maps one byte to another, and all 16 bytes of the state go through the same S-box. It's
+built in two steps, and this is where the Galois field from part 1 comes in.
+
+### Step 1: inversion in GF(2⁸)
+
+Take the input byte $A_i$ as an element of $GF(2^8)$ and compute its multiplicative inverse
+$B_i' = A_i^{-1}$. Zero has no inverse, so the S-box defines $0 \mapsto 0$ for this step.
+
+Inversion is what makes the S-box strongly nonlinear. The inverse of a sum has nothing simple to
+do with the sum of inverses, and that breaks the linear and differential relationships attackers
+look for.
+
+### Step 2: an affine map over GF(2)
+
+Inversion alone has an algebraic structure that is too clean, so the result is scrambled further
+with a fixed affine transformation. Writing the bits of $B_i'$ as $b'_0$ (least significant)
+through $b'_7$, each output bit is
+
+$$
+b_j = b'_j \oplus b'_{j+4} \oplus b'_{j+5} \oplus b'_{j+6} \oplus b'_{j+7} \oplus c_j,
+$$
+
+with the indices taken mod 8 and $c = \texttt{0x63} = \texttt{0110 0011}$. In matrix form this is
+$B = M \cdot B' \oplus \texttt{0x63}$, where $M$ is an 8×8 bit matrix whose rows are cyclic shifts of
+$\texttt{1000 1111}$.
+
+### Worked example: S(0x53)
+
+This is the standard's own example. In part 1 we found the inverse with the extended Euclidean
+algorithm:
+
+$$
+\texttt{0x53}^{-1} = \texttt{0xCA}.
+$$
+
+Written least significant bit first, $\texttt{0xCA}$ has bits
+$b'_0 \dots b'_7 = 0, 1, 0, 1, 0, 0, 1, 1$. The affine map then works through bit by bit:
+
+| $j$ | $b'_j$ | $b'_{j+4}$ | $b'_{j+5}$ | $b'_{j+6}$ | $b'_{j+7}$ | $c_j$ | $b_j$ |
+| --- | ------ | ---------- | ---------- | ---------- | ---------- | ----- | ----- |
+| 0 | 0 | 0 | 0 | 1 | 1 | 1 | 1 |
+| 1 | 1 | 0 | 1 | 1 | 0 | 1 | 0 |
+| 2 | 0 | 1 | 1 | 0 | 1 | 0 | 1 |
+| 3 | 1 | 1 | 0 | 1 | 0 | 0 | 1 |
+| 4 | 0 | 0 | 1 | 0 | 1 | 0 | 0 |
+| 5 | 0 | 1 | 0 | 1 | 0 | 1 | 1 |
+| 6 | 1 | 0 | 1 | 0 | 0 | 1 | 1 |
+| 7 | 1 | 1 | 0 | 0 | 1 | 0 | 1 |
+
+Reading the last column from $b_7$ down to $b_0$ gives $\texttt{1110 1101}$, so
+
+$$
+S(\texttt{0x53}) = \texttt{0xED}.
+$$
+
+### In practice, a table
+
+Nobody computes an inverse per byte at encryption time. The S-box has only 256 inputs, so
+software stores it as a 256-byte lookup table. Its first row is
+
+```text
+63 7c 77 7b f2 6b 6f c5 30 01 67 2b fe d7 ab 76
+```
+
+The first entry shows $S(\texttt{0x00}) = \texttt{0x63}$: zero stays zero through the inversion
+step, and the affine map then adds the constant.
+
+Two properties are easy to check by running through all 256 inputs. The S-box has no fixed
+points ($S(a) \neq a$ for every $a$), and no "opposite" fixed points either
+($S(a) \neq \bar{a}$, where $\bar{a}$ is the bitwise complement). The affine constant
+$\texttt{0x63}$ was chosen to guarantee this.
+
+## Diffusion
+
+Substitution scrambles each byte on its own. Without a diffusion layer, each output byte would
+depend on only one input byte, and the cipher would be 16 independent 8-bit ciphers. The
+diffusion layer spreads every byte's influence across the whole state.
+
+### ShiftRows
+
+ShiftRows rotates each row of the state to the left, row $r$ by $r$ positions:
+
+| | before | | | | after | | | |
+| ----- | ----- | ----- | ----- | ----- | ----- | ----- | ----- | ----- |
+| row 0 | $B_0$ | $B_4$ | $B_8$ | $B_{12}$ | $B_0$ | $B_4$ | $B_8$ | $B_{12}$ |
+| row 1 | $B_1$ | $B_5$ | $B_9$ | $B_{13}$ | $B_5$ | $B_9$ | $B_{13}$ | $B_1$ |
+| row 2 | $B_2$ | $B_6$ | $B_{10}$ | $B_{14}$ | $B_{10}$ | $B_{14}$ | $B_2$ | $B_6$ |
+| row 3 | $B_3$ | $B_7$ | $B_{11}$ | $B_{15}$ | $B_{15}$ | $B_3$ | $B_7$ | $B_{11}$ |
+
+After the shift, each column holds exactly one byte from each of the four original columns. That
+property is what lets MixColumns spread information across the full block, not only within a
+column.
+
+### MixColumns
+
+MixColumns treats each column as a vector of four elements of $GF(2^8)$ and multiplies it by a
+fixed matrix:
+
+$$
+\begin{pmatrix} C_0 \\ C_1 \\ C_2 \\ C_3 \end{pmatrix}
+=
+\begin{pmatrix}
+02 & 03 & 01 & 01 \\
+01 & 02 & 03 & 01 \\
+01 & 01 & 02 & 03 \\
+03 & 01 & 01 & 02
+\end{pmatrix}
+\begin{pmatrix} B_0 \\ B_5 \\ B_{10} \\ B_{15} \end{pmatrix}
+$$
+
+All the entries are hex bytes, and all the arithmetic is in $GF(2^8)$: products use the AES
+polynomial, and sums are XOR. Each output byte depends on all four input bytes of its column.
+
+The constants are deliberately tiny. Multiplying by $\texttt{01}$ costs nothing. Multiplying by
+$\texttt{02}$ is the `xtime` operation from part 1: a left shift, plus an XOR with
+$\texttt{0x1B}$ if a bit falls off the top. Multiplying by $\texttt{03}$ is `xtime` plus one more
+XOR, since $\texttt{03} = \texttt{02} \oplus \texttt{01}$. A whole column takes only shifts and
+XORs.
+
+The matrix is also chosen so that any change to the input column shows up in many output bytes.
+If $k$ input bytes of a column change, at least $5 - k$ output bytes change, so the input and
+output differences together always touch at least 5 of the 8 bytes. This is called a branch
+number of 5, the maximum possible for a 4×4 matrix.
+
+Part 1 worked one column through by hand. For the column $(\texttt{DB}, \texttt{13}, \texttt{53},
+\texttt{45})$:
+
+$$
+\begin{aligned}
+C_0 &= \texttt{02}\cdot\texttt{DB} \oplus \texttt{03}\cdot\texttt{13} \oplus \texttt{53} \oplus \texttt{45} \\
+    &= \texttt{AD} \oplus \texttt{35} \oplus \texttt{53} \oplus \texttt{45} = \texttt{8E},
+\end{aligned}
+$$
+
+and the full output column is $(\texttt{8E}, \texttt{4D}, \texttt{A1}, \texttt{BC})$.
+
+### How fast diffusion happens
+
+ShiftRows and MixColumns together give full diffusion after two rounds. I checked this by
+encrypting two plaintexts that differ in a single bit, with an all-zero key:
+
+| Rounds | Bytes of the state that differ |
+| ------ | ------------------------------ |
+| 1 | 4 of 16 |
+| 2 | 16 of 16 |
+
+After one round, the flipped bit has spread through one column, so 4 bytes differ. After two
+rounds, ShiftRows has moved those 4 bytes into 4 different columns, MixColumns has spread each one
+through its column, and every byte of the state is different.
+
+## Key addition
+
+The key addition layer XORs the 16-byte round key into the state, byte by byte. In field terms,
+it's addition in $GF(2^8)$. It's the only layer that uses the key at all. Every other layer is
+fixed and public.
+
+## The key schedule
+
+The key schedule stretches the 16-byte AES-128 key into the 11 round keys, 176 bytes in total. It
+works in 32-bit words: $W[0]$ to $W[43]$, four words per round key. Round key $k_i$ is
+$W[4i], \dots, W[4i+3]$.
+
+The first four words are the key itself. Each later word is
+
+$$
+W[i] =
+\begin{cases}
+W[i-4] \oplus g(W[i-1]) & \text{if } i \equiv 0 \pmod 4, \\
+W[i-4] \oplus W[i-1] & \text{otherwise.}
+\end{cases}
+$$
+
+The function $g$ is the only nonlinear part of the key schedule. Applied to a word of four bytes
+$(V_0, V_1, V_2, V_3)$, it
+
+1. rotates the word left by one byte, giving $(V_1, V_2, V_3, V_0)$,
+2. sends each byte through the S-box,
+3. XORs the first byte with a round coefficient $RC[j]$.
+
+The round coefficients are successive powers of $x$ in $GF(2^8)$, which means repeated `xtime`
+starting from $\texttt{01}$:
+
+| $j$ | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+| --- | - | - | - | - | - | - | - | - | - | -- |
+| $RC[j]$ | 01 | 02 | 04 | 08 | 10 | 20 | 40 | 80 | 1B | 36 |
+
+After $\texttt{80}$ the next doubling overflows, and the reduction gives $\texttt{1B}$. The
+coefficient breaks the symmetry between rounds, so that no two rounds end up using related keys
+in a way an attacker could exploit.
+
+<Note title="Worked example: the first word of round key 1">
+
+The standard's example key is `2b7e1516 28aed2a6 abf71588 09cf4f3c`, so $W[3] = $ `09cf4f3c`.
+
+1. Rotate: `09cf4f3c` → `cf4f3c09`.
+2. S-box each byte: `cf4f3c09` → `8a84eb01`.
+3. XOR the first byte with $RC[1] = \texttt{01}$: `8a84eb01` → `8b84eb01`.
+
+Then $W[4] = W[0] \oplus g(W[3]) = $ `2b7e1516` $\oplus$ `8b84eb01` $=$ `a0fafe17`.
+
+The next three words need no $g$: $W[5] = W[1] \oplus W[4] = $ `88542cb1`, and so on.
+
+</Note>
+
+The 192- and 256-bit key schedules follow the same idea with 6 and 8 words per step. The 256-bit
+version adds one extra S-box application in the middle of each step.
+
+## One full round, traced
+
+Here is round 1 of the example in the AES standard, with plaintext
+`3243f6a8 885a308d 313198a2 e0370734` and the key from the note above. Each line lists the 16
+state bytes in order $A_0 \dots A_{15}$, so every group of four is one column.
+
+```text
+plaintext        32 43 f6 a8  88 5a 30 8d  31 31 98 a2  e0 37 07 34
+k0 (the key)     2b 7e 15 16  28 ae d2 a6  ab f7 15 88  09 cf 4f 3c
+start of round 1 19 3d e3 be  a0 f4 e2 2b  9a c6 8d 2a  e9 f8 48 08
+
+after SubBytes   d4 27 11 ae  e0 bf 98 f1  b8 b4 5d e5  1e 41 52 30
+after ShiftRows  d4 bf 5d 30  e0 b4 52 ae  b8 41 11 f1  1e 27 98 e5
+after MixColumns 04 66 81 e5  e0 cb 19 9a  48 f8 d3 7a  28 06 26 4c
+k1               a0 fa fe 17  88 54 2c b1  23 a3 39 39  2a 6c 76 05
+end of round 1   a4 9c 7f f2  68 9f 35 2b  6b 5b ea 43  02 6a 50 49
+```
+
+A few things are worth checking by eye:
+
+- SubBytes acts on bytes independently: $\texttt{19}$ always becomes $\texttt{d4}$, wherever it sits.
+- ShiftRows leaves row 0 alone. The bytes at positions 0, 4, 8 and 12 (`d4`, `e0`, `b8`, `1e`) don't
+  move. Row 1 shifts by one, so `bf` moves from column 1 into column 0.
+- $k_1$ starts with `a0fafe17`, the word computed in the note above.
+
+Nine more rounds later, the ciphertext is
+
+```text
+39 25 84 1d  02 dc 09 fb  dc 11 85 97  19 6a 0b 32
+```
+
+which matches the standard.
+
+## Decryption
+
+AES isn't a Feistel cipher, so decryption can't reuse the encryption circuit with the keys
+reversed, as DES does. Every layer has to be inverted:
+
+- **Key addition** is its own inverse, because XOR undoes itself.
+- **Inverse ShiftRows** rotates row $r$ to the right by $r$ positions.
+- **Inverse MixColumns** multiplies by the inverse matrix:
+
+$$
+\begin{pmatrix}
+0E & 0B & 0D & 09 \\
+09 & 0E & 0B & 0D \\
+0D & 09 & 0E & 0B \\
+0B & 0D & 09 & 0E
+\end{pmatrix}
+$$
+
+  These constants are bigger than 01, 02 and 03, so inverse MixColumns is somewhat more expensive
+  than the forward direction. Applying it to $(\texttt{8E}, \texttt{4D}, \texttt{A1}, \texttt{BC})$
+  gives back $(\texttt{DB}, \texttt{13}, \texttt{53}, \texttt{45})$.
+- **Inverse byte substitution** first undoes the affine map, then inverts in $GF(2^8)$ again,
+  since the inverse of an inverse is the original element. In practice it's a second
+  256-byte table. For example, $S^{-1}(\texttt{0xED}) = \texttt{0x53}$.
+
+Decryption runs the rounds in reverse order and uses the round keys from $k_{10}$ down to $k_0$.
+The key schedule is the same, but the last round key is needed first, so an implementation either
+computes all round keys in advance or runs the schedule forward once before decrypting.
+
+## The code
+
+This is the implementation I used for every number in this post. It's written to be read, not to
+be fast or safe: a real implementation would use precomputed tables and constant-time techniques
+to resist timing attacks.
+
+```python
+def gf_mul(a, b):
+    """Multiply in GF(2^8) with the AES polynomial."""
+    r = 0
+    while b:
+        if b & 1:
+            r ^= a
+        b >>= 1
+        a <<= 1
+        if a & 0x100:
+            a ^= 0x11B
+    return r
+
+def gf_inv(a):
+    """Brute-force inverse; fine for building a 256-entry table."""
+    return 0 if a == 0 else next(b for b in range(1, 256) if gf_mul(a, b) == 1)
+
+def affine(b):
+    r = 0
+    for j in range(8):
+        bit = (b >> j ^ b >> (j + 4) % 8 ^ b >> (j + 5) % 8
+               ^ b >> (j + 6) % 8 ^ b >> (j + 7) % 8 ^ 0x63 >> j) & 1
+        r |= bit << j
+    return r
+
+SBOX = [affine(gf_inv(x)) for x in range(256)]
+
+def sub_bytes(s):
+    return [SBOX[x] for x in s]
+
+def shift_rows(s):
+    # s[r + 4*c] is row r, column c; row r rotates left by r
+    return [s[r + 4 * ((c + r) % 4)] for c in range(4) for r in range(4)]
+
+def mix_columns(s):
+    M = ((2, 3, 1, 1), (1, 2, 3, 1), (1, 1, 2, 3), (3, 1, 1, 2))
+    out = []
+    for c in range(4):
+        col = s[4 * c:4 * c + 4]
+        for row in M:
+            v = 0
+            for m, x in zip(row, col):
+                v ^= gf_mul(m, x)
+            out.append(v)
+    return out
+
+def key_schedule(key):
+    W = [list(key[4 * i:4 * i + 4]) for i in range(4)]
+    rc = 1
+    for i in range(4, 44):
+        t = W[i - 1][:]
+        if i % 4 == 0:
+            t = [SBOX[x] for x in t[1:] + t[:1]]   # g: rotate, then S-box
+            t[0] ^= rc
+            rc = gf_mul(rc, 2)
+        W.append([a ^ b for a, b in zip(W[i - 4], t)])
+    return [sum(W[4 * r:4 * r + 4], []) for r in range(11)]
+
+def encrypt(block, key):
+    k = key_schedule(key)
+    s = [a ^ b for a, b in zip(block, k[0])]
+    for r in range(1, 11):
+        s = shift_rows(sub_bytes(s))
+        if r < 10:
+            s = mix_columns(s)
+        s = [a ^ b for a, b in zip(s, k[r])]
+    return bytes(s)
+
+pt = bytes.fromhex("3243f6a8885a308d313198a2e0370734")
+key = bytes.fromhex("2b7e151628aed2a6abf7158809cf4f3c")
+assert encrypt(pt, key).hex() == "3925841d02dc09fbdc118597196a0b32"
+```
+
+## Summary
+
+- AES is Rijndael with the block fixed at 128 bits. Keys are 128, 192 or 256 bits, with 10, 12
+  or 14 rounds.
+- The 16-byte state is a 4×4 byte matrix, filled column by column.
+- Each round applies SubBytes, ShiftRows, MixColumns and key addition. An extra key addition
+  comes before round 1, and the last round skips MixColumns.
+- SubBytes is inversion in $GF(2^8)$ followed by an affine map. It's the only nonlinear layer.
+- ShiftRows moves bytes between columns, and MixColumns mixes each column with a matrix of 01,
+  02 and 03. Together they give full diffusion after two rounds.
+- The key schedule expands the key word by word, using the S-box and the round coefficients
+  $x^{j-1}$ in the $g$ function.
+- Decryption inverts every layer, with inverse MixColumns using the constants 0E, 0B, 0D and 09.
