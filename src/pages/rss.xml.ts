@@ -4,6 +4,7 @@ import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { loadRenderers } from 'astro:container';
 import { render } from 'astro:content';
 import { getContainerRenderer } from '@astrojs/mdx/container-renderer';
+import { getContainerRenderer as getReactRenderer } from '@astrojs/react/container-renderer';
 import Theorem from '@/components/math/theorem/Theorem.astro';
 import Proof from '@/components/math/proof/Proof.astro';
 import Note from '@/components/math/note/Note.astro';
@@ -14,7 +15,7 @@ import { SITE, getPosts } from '@/lib/site';
 export const GET: APIRoute = async (context) => {
 	// Full post HTML, so feed readers don't have to open the site. Same components as [...id].astro.
 	const container = await AstroContainer.create({
-		renderers: await loadRenderers([getContainerRenderer()]),
+		renderers: await loadRenderers([getContainerRenderer(), getReactRenderer()]),
 	});
 	const components = { Theorem, Proof, Note, Sidenote, DocCard };
 	// Feed readers don't know the page URL, so make /root links and images absolute

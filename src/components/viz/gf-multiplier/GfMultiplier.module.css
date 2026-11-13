@@ -1,0 +1,231 @@
+.box {
+	margin: 1.5rem 0;
+	padding: 1rem;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+}
+
+.controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem 0.75rem;
+	font-family: var(--mono);
+	font-size: 0.9rem;
+}
+.field {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+}
+.input {
+	width: 3.5rem;
+	padding: 0.35rem 0.5rem;
+	font: inherit;
+	color: var(--fg-strong);
+	background: var(--code-bg);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+}
+.input:focus-visible,
+.button:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 0;
+}
+.input[aria-invalid='true'] {
+	border-color: #c2410c;
+}
+.times {
+	color: var(--muted);
+}
+.button {
+	padding: 0.35rem 0.75rem;
+	font: inherit;
+	font-size: 0.85rem;
+	color: var(--accent);
+	background: transparent;
+	border: 1px solid var(--accent);
+	border-radius: 999px;
+	cursor: pointer;
+}
+.button:hover {
+	background: var(--hover);
+}
+.button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.poly,
+.result {
+	margin: 0.75rem 0 0;
+	font: 0.875rem/1.6 var(--mono);
+}
+.poly {
+	color: var(--muted);
+}
+.result {
+	min-height: 1.6em;
+	color: var(--fg-strong);
+	font-weight: 600;
+	white-space: pre-wrap;
+}
+.error {
+	margin: 0.75rem 0 0;
+	font: 0.8rem var(--mono);
+	color: #c2410c;
+}
+
+/* Rows not yet reached keep their space so the table doesn't jump while stepping */
+.hidden {
+	opacity: 0;
+	visibility: hidden;
+}
+.box tbody tr {
+	transition:
+		opacity 200ms ease-out,
+		visibility 200ms;
+}
+.current {
+	background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.caption {
+	margin-top: 0.75rem;
+	font-size: 0.8125rem;
+	color: var(--muted);
+}
+
+.buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+/* Motion tokens: one rhythm for every step animation */
+.box {
+	--cell: 1.5rem;
+	--gap: 0.2rem;
+	--dur: 260ms;
+	--ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.detail {
+	display: grid;
+	grid-template-columns: auto auto;
+	justify-content: start;
+	align-items: center;
+	gap: 0.35rem 0.75rem;
+	margin-top: 1rem;
+	padding: 0.75rem;
+	overflow: hidden;
+	font: 0.8125rem var(--mono);
+	background: var(--code-bg);
+	border-radius: 6px;
+}
+.label {
+	color: var(--muted);
+	text-align: right;
+	white-space: nowrap;
+}
+.note {
+	color: var(--muted);
+	font-style: italic;
+}
+
+.bits {
+	display: inline-flex;
+	gap: var(--gap);
+}
+.bit {
+	display: inline-grid;
+	place-items: center;
+	width: var(--cell);
+	height: var(--cell);
+	color: var(--muted);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	font-variant-numeric: tabular-nums;
+}
+.on {
+	color: var(--fg-strong);
+	font-weight: 600;
+	background: color-mix(in srgb, var(--accent) 22%, transparent);
+	border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+/* Bit 8 sits outside the byte, so mark it with a dashed edge as well as position */
+.overflow {
+	border-style: dashed;
+}
+
+/* Rows of a step enter one after another: shift, reduce, result, accumulate */
+.r1,
+.r2,
+.r3,
+.r4 {
+	animation: enter var(--dur) var(--ease) both;
+}
+.r2 {
+	animation-delay: 220ms;
+}
+.r3 {
+	animation-delay: 440ms;
+}
+.r4 {
+	animation-delay: 660ms;
+}
+/* The shift itself: the whole strip moves one cell to the left */
+.slide .bits {
+	animation: shift var(--dur) var(--ease) both;
+}
+/* Result bits that changed in this XOR pulse once */
+.flip {
+	animation: flip 300ms var(--ease) 760ms both;
+}
+
+@keyframes enter {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+}
+@keyframes shift {
+	from {
+		transform: translateX(calc(var(--cell) + var(--gap)));
+	}
+}
+@keyframes flip {
+	from {
+		opacity: 0.25;
+		transform: scale(0.7);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.r1,
+	.r2,
+	.r3,
+	.r4,
+	.slide .bits,
+	.flip {
+		animation: none;
+	}
+	.box tbody tr {
+		transition: none;
+	}
+}
+
+/* Narrow screens: labels above their strips so nine cells fit */
+@media (max-width: 30rem) {
+	.detail {
+		grid-template-columns: auto;
+		gap: 0.15rem;
+	}
+	.label {
+		text-align: left;
+		margin-top: 0.35rem;
+	}
+	.box {
+		--cell: 1.4rem;
+	}
+}

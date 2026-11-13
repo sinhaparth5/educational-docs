@@ -9,6 +9,8 @@ tags: [cryptography, aes, math, finite-fields]
 series: { name: "AES with Christof Paar", part: 1 }
 ---
 
+import GfMultiplier from '@/components/viz/gf-multiplier/GfMultiplier';
+
 AES works on bytes, and every layer except ShiftRows does some kind of arithmetic on them.
 AddRoundKey adds the key, SubBytes takes an inverse, and MixColumns multiplies by constants. None
 of this is ordinary integer arithmetic, and it isn't arithmetic mod 256 either. It happens in a
@@ -406,6 +408,11 @@ Any product is then a sum (XOR) of these. Since $\texttt{0x13} = \texttt{10} + \
 $$
 \texttt{0x57} \cdot \texttt{0x13} = \texttt{07} \oplus \texttt{AE} \oplus \texttt{57} = \texttt{0xFE}.
 $$
+
+Try it with any two bytes. Step through one bit of $b$ at a time to watch the shifts, the
+reductions and the running XOR:
+
+<GfMultiplier client:visible />
 
 Put into a loop, this is shift-and-add multiplication with XOR in place of addition:
 
