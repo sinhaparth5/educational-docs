@@ -1,0 +1,511 @@
+---
+title: Galois fields for the AES
+description: Detailed notes on Christof Paar's lecture introducing finite fields. Groups, fields, prime fields GF(p), and the extension field GF(2⁸) that AES does its byte arithmetic in, with every example worked by hand.
+date: 2026-11-13
+featured: true
+tags: [cryptography, aes, math, finite-fields]
+---
+
+AES works on bytes, and every layer except ShiftRows does some kind of arithmetic on them.
+AddRoundKey adds the key, SubBytes takes an inverse, and MixColumns multiplies by constants. None
+of this is ordinary integer arithmetic, and it isn't arithmetic mod 256 either. It happens in a
+finite field called $GF(2^8)$.
+
+These are my notes on Christof Paar's lecture introducing Galois fields [@paar_lecture7]. The
+lecture follows section 4.3 of his textbook with Jan Pelzl [@paar2010], so the definitions use
+the book's notation. I've worked every example out in full and checked the results with a short
+script, because the arithmetic only really clicks once you've done it by hand.
+
+## Why AES needs a field
+
+A block cipher has to be invertible. If encryption multiplies a byte by something, decryption
+has to divide by it, and the result of every operation has to be a byte again. So we want a set
+of 256 elements in which we can add, subtract, multiply and divide, and never leave the set.
+
+The obvious candidates both fail:
+
+- **Integers** overflow. $200 + 100$ is not a byte, and $7 / 2$ is not an integer.
+- **Integers mod 256** stay in range, but division breaks. $2 \times 128 \equiv 0 \bmod 256$, so
+  there is no way to undo multiplication by 2. Half of all bytes have no inverse.
+
+A structure where all four operations work inside a finite set is a finite field. To define one
+we need groups first.
+
+## Groups
+
+<Theorem kind="Definition" title="Group">
+
+A group is a set $G$ together with one operation $\circ$ such that
+
+1. $G$ is closed: $a \circ b \in G$ for all $a, b \in G$.
+2. The operation is associative: $a \circ (b \circ c) = (a \circ b) \circ c$ for all $a, b, c$.
+3. There is a neutral element $1$ with $a \circ 1 = 1 \circ a = a$ for all $a$.
+4. Every $a$ has an inverse $a^{-1}$ with $a \circ a^{-1} = a^{-1} \circ a = 1$.
+
+The group is abelian (commutative) if also $a \circ b = b \circ a$ for all $a, b$.
+
+</Theorem>
+
+The symbols $1$ and $a^{-1}$ are just names here. When the operation is addition, the neutral
+element is $0$ and the inverse of $a$ is $-a$.
+
+Some examples:
+
+- $(\mathbb{Z}, +)$ is an abelian group: $0$ is neutral and $-a$ is the inverse of $a$.
+- $(\mathbb{Z}, \times)$ is not a group. $1$ is neutral, but $2$ has no integer inverse.
+- $(\mathbb{Z}_m, + \bmod m)$ is a finite abelian group for every $m$. The inverse of $a$ is
+  $m - a$, since $a + (m - a) = m \equiv 0$.
+- $(\mathbb{Z}_m, \times \bmod m)$ is not a group, because $0$ never has an inverse. Even with $0$
+  removed it usually fails.
+
+That last point is where everything hinges. In $\mathbb{Z}_9$, the products $3 \times 3$,
+$3 \times 6$ and $6 \times 6$ are all $\equiv 0 \bmod 9$. Two nonzero numbers multiply to zero, so
+$3$ and $6$ can't have inverses: if $3^{-1}$ existed, then
+$3 = 3^{-1} \cdot 3 \cdot 3 = 3^{-1} \cdot 0 = 0$, which is false. Elements like these are called
+zero divisors.
+
+<Theorem title="Invertible elements of ℤₘ">
+
+$a \in \mathbb{Z}_m$ has a multiplicative inverse if and only if $\gcd(a, m) = 1$.
+
+</Theorem>
+
+<Proof>
+
+If $\gcd(a, m) = 1$, the extended Euclidean algorithm gives integers $s, t$ with
+$s \cdot a + t \cdot m = 1$. Reducing mod $m$ gives $s \cdot a \equiv 1$, so $s$ is the inverse.
+If $\gcd(a, m) = d > 1$, then every $a \cdot s$ is a multiple of $d$ and every multiple of $m$
+is a multiple of $d$, so $a \cdot s - 1$ is never a multiple of $m$, and $a \cdot s \equiv 1$ has
+no solution.
+
+</Proof>
+
+So the nonzero elements of $\mathbb{Z}_m$ form a multiplicative group exactly when every one of
+them is coprime to $m$, which means $m$ is prime. That's the whole idea behind prime fields.
+
+## Fields
+
+A field combines two groups on the same set.
+
+<Theorem kind="Definition" title="Field">
+
+A field $F$ is a set with two operations, written $+$ and $\times$, such that
+
+1. $F$ is an abelian group under $+$, with neutral element $0$.
+2. $F \setminus \{0\}$ is an abelian group under $\times$, with neutral element $1$.
+3. The distributive law holds: $a \times (b + c) = (a \times b) + (a \times c)$.
+
+</Theorem>
+
+Subtraction is adding the additive inverse, and division is multiplying by the multiplicative
+inverse, so a field gives you all four operations. The rationals $\mathbb{Q}$, reals $\mathbb{R}$
+and complex numbers $\mathbb{C}$ are all fields, but they're infinite. A computer needs a field
+with finitely many elements, ideally $2^8$ of them.
+
+If you drop the requirement that multiplication has inverses, you get a ring. $\mathbb{Z}_9$
+is a ring and not a field. AES needs the full field, because the S-box divides.
+
+<Theorem title="Existence of finite fields">
+
+A field with a finite number of elements exists only if the number of elements is a prime power
+$p^m$, where $p$ is prime and $m$ is a positive integer. Such a field is written $GF(p^m)$, and
+for each prime power there is essentially only one of it.
+
+</Theorem>
+
+$GF$ stands for Galois field, after Évariste Galois. So fields with 11 ($11^1$), 81 ($3^4$) and
+256 ($2^8$) elements exist, and fields with 12 or 255 elements don't. The prime $p$ is called the
+characteristic of the field.
+
+There are two kinds of finite field to understand:
+
+- $m = 1$: prime fields $GF(p)$.
+- $m > 1$: extension fields $GF(p^m)$. AES uses $GF(2^8)$.
+
+## Prime fields GF(p)
+
+For $m = 1$ the construction is the one we already know: take the integers
+$\{0, 1, \dots, p - 1\}$ and do all arithmetic modulo $p$. Since $p$ is prime, every nonzero
+element is coprime to $p$, so by the theorem above every nonzero element has an inverse.
+
+Here is the multiplication table of $GF(7)$:
+
+| $\times$ | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
+| -------- | - | - | - | - | - | - | - |
+| **0**    | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| **1**    | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
+| **2**    | 0 | 2 | 4 | 6 | 1 | 3 | 5 |
+| **3**    | 0 | 3 | 6 | 2 | 5 | 1 | 4 |
+| **4**    | 0 | 4 | 1 | 5 | 2 | 6 | 3 |
+| **5**    | 0 | 5 | 3 | 1 | 6 | 4 | 2 |
+| **6**    | 0 | 6 | 5 | 4 | 3 | 2 | 1 |
+
+Every nonzero row contains each of $1, \dots, 6$ exactly once. That's the table telling you
+multiplication by a nonzero element is a permutation and can be undone. The $1$ in each row
+marks the inverse:
+
+| $a$      | 1 | 2 | 3 | 4 | 5 | 6 |
+| -------- | - | - | - | - | - | - |
+| $a^{-1}$ | 1 | 4 | 5 | 2 | 3 | 6 |
+
+For example $3 \times 5 = 15 \equiv 1 \bmod 7$. Compare a row of $\mathbb{Z}_9$: the row for 3 is
+$0, 3, 6, 0, 3, 6, 0, 3, 6$. It hits only three values and never hits 1.
+
+For large $p$ (hundreds of digits, as in RSA or elliptic curves) you can't write a table, so you
+find inverses with the extended Euclidean algorithm.
+
+### GF(2)
+
+The smallest field is $GF(2) = \{0, 1\}$:
+
+| $+$   | 0 | 1 |     | $\times$ | 0 | 1 |
+| ----- | - | - | --- | -------- | - | - |
+| **0** | 0 | 1 |     | **0**    | 0 | 0 |
+| **1** | 1 | 0 |     | **1**    | 0 | 1 |
+
+Addition mod 2 is XOR and multiplication mod 2 is AND. $GF(2)$ is too small to do much with
+alone, but it supplies the coefficients for the field AES actually uses.
+
+## Extension fields GF(2ᵐ)
+
+$GF(2^8)$ has 256 elements, but 256 isn't prime, so "integers mod 256" is not the answer. The
+elements need a different representation: the elements of an extension field are polynomials.
+
+An element of $GF(2^m)$ is a polynomial of degree at most $m - 1$ whose coefficients are in
+$GF(2)$:
+
+$$
+A(x) = a_{m-1}x^{m-1} + \dots + a_1 x + a_0, \qquad a_i \in \{0, 1\}.
+$$
+
+There are $m$ coefficients, each 0 or 1, so there are exactly $2^m$ such polynomials. For
+$GF(2^3)$ the eight elements are
+
+$$
+0,\ 1,\ x,\ x + 1,\ x^2,\ x^2 + 1,\ x^2 + x,\ x^2 + x + 1.
+$$
+
+For $GF(2^8)$ there are eight coefficients, which is a byte. The byte $\texttt{11000010}$
+($\texttt{0xC2}$) is the polynomial $x^7 + x^6 + x$. A byte in AES is a field element written as
+its coefficient vector, with the highest power on the left. You never evaluate these polynomials
+at a value of $x$. The variable $x$ only marks positions.
+
+### Addition and subtraction
+
+Add two elements by adding matching coefficients in $GF(2)$:
+
+$$
+C(x) = A(x) + B(x) = \sum_{i=0}^{m-1} c_i x^i, \qquad c_i \equiv a_i + b_i \bmod 2.
+$$
+
+Coefficient addition mod 2 is XOR, so adding two bytes means XORing them. There are no carries,
+and the degree can't grow, so the result is always another element. Subtraction is the same
+operation, since $-1 \equiv 1 \bmod 2$. Every element is its own additive inverse.
+
+In $GF(2^8)$:
+
+$$
+\begin{aligned}
+A &= x^7 + x^6 + x^4 + 1 &&= \texttt{1101 0001} \\
+B &= x^4 + x^2 + 1 &&= \texttt{0001 0101} \\
+A + B &= x^7 + x^6 + x^2 &&= \texttt{1100 0100}
+\end{aligned}
+$$
+
+The $x^4$ and $1$ terms appear in both, and $1 + 1 = 0$, so they cancel. This is the operation
+AES's AddRoundKey layer performs: state byte plus key byte in $GF(2^8)$.
+
+### Multiplication
+
+Multiplying two polynomials of degree up to $m - 1$ gives a product of degree up to $2m - 2$,
+which no longer fits in $m$ bits. In a prime field we reduce an oversized result modulo a prime.
+Here we reduce modulo a polynomial that behaves like a prime.
+
+<Theorem kind="Definition" title="Irreducible polynomial">
+
+A polynomial $P(x)$ over $GF(2)$ is irreducible if it can't be written as a product of two
+polynomials over $GF(2)$ that each have degree at least 1.
+
+</Theorem>
+
+<Theorem kind="Definition" title="Multiplication in GF(2ᵐ)">
+
+Let $P(x)$ be an irreducible polynomial of degree $m$ over $GF(2)$. Then
+
+$$
+C(x) \equiv A(x) \cdot B(x) \bmod P(x).
+$$
+
+</Theorem>
+
+The procedure has two steps:
+
+1. Multiply the polynomials normally, with coefficients mod 2.
+2. Divide by $P(x)$ and keep the remainder, which has degree below $m$.
+
+#### Why irreducible?
+
+Irreducible polynomials are the polynomial version of primes, and they fail in the same way when
+you leave them out. Take $Q(x) = x^3 + x^2 + x + 1$. Over $GF(2)$ it factors:
+
+$$
+(x + 1)(x^2 + 1) = x^3 + x^2 + x + 1.
+$$
+
+So if we computed modulo $Q(x)$, then $(x + 1) \cdot (x^2 + 1) \equiv 0$. Two nonzero elements
+multiply to zero, exactly like $3 \times 3$ in $\mathbb{Z}_9$, and neither $x + 1$ nor $x^2 + 1$
+can have an inverse. Reducing modulo an irreducible $P(x)$ rules this out, and every nonzero
+element then has an inverse.
+
+For small degrees you can find the irreducible polynomials by trying every possible factor:
+
+| Degree | Irreducible polynomials over $GF(2)$ |
+| ------ | ------------------------------------ |
+| 2 | $x^2 + x + 1$ |
+| 3 | $x^3 + x + 1$, $x^3 + x^2 + 1$ |
+| 4 | $x^4 + x + 1$, $x^4 + x^3 + 1$, $x^4 + x^3 + x^2 + x + 1$ |
+
+A field can be built with any irreducible polynomial of the right degree, and the results are
+the same field with the elements labelled differently. A standard has to pick one so that
+everyone gets the same bytes.
+
+#### The smallest example: GF(2²)
+
+With $P(x) = x^2 + x + 1$, the reduction rule is $x^2 \equiv x + 1$ (in $GF(2)$, moving a term
+across the equals sign doesn't change its sign). The full multiplication table is:
+
+| $\times$    | 0 | 1       | $x$     | $x + 1$ |
+| ----------- | - | ------- | ------- | ------- |
+| **0**       | 0 | 0       | 0       | 0       |
+| **1**       | 0 | 1       | $x$     | $x + 1$ |
+| **$x$**     | 0 | $x$     | $x + 1$ | 1       |
+| **$x + 1$** | 0 | $x + 1$ | 1       | $x$     |
+
+As an example of one entry: $x \cdot (x + 1) = x^2 + x \equiv (x + 1) + x = 1$. So $x$ and $x + 1$
+are inverses of each other. Every nonzero row is a permutation, as it was in $GF(7)$.
+
+#### Worked example in GF(2³)
+
+This is the example from the book. Take $P(x) = x^3 + x + 1$ and multiply $A(x) = x^2 + x + 1$
+by $B(x) = x^2 + 1$.
+
+First the plain product:
+
+$$
+\begin{aligned}
+(x^2 + x + 1)(x^2 + 1) &= x^4 + x^2 + x^3 + x + x^2 + 1 \\
+&= x^4 + x^3 + 2x^2 + x + 1 \\
+&= x^4 + x^3 + x + 1.
+\end{aligned}
+$$
+
+The two $x^2$ terms cancel because $2 \equiv 0 \bmod 2$. The result has degree 4, too big for
+$GF(2^3)$, so reduce. From $P(x) \equiv 0$ we get
+
+$$
+x^3 \equiv x + 1, \qquad x^4 = x \cdot x^3 \equiv x^2 + x.
+$$
+
+Substitute both:
+
+$$
+x^4 + x^3 + x + 1 \equiv (x^2 + x) + (x + 1) + x + 1 = x^2 + x.
+$$
+
+So $A \cdot B = x^2 + x$. As bit vectors, $\texttt{111} \cdot \texttt{101} = \texttt{110}$.
+
+Doing the multiplication by hand for every pair gives the inverse of each element of
+$GF(2^3)$:
+
+| $a$ | $a^{-1}$ |
+| --- | -------- |
+| $1$ | $1$ |
+| $x$ | $x^2 + 1$ |
+| $x + 1$ | $x^2 + x$ |
+| $x^2$ | $x^2 + x + 1$ |
+| $x^2 + 1$ | $x$ |
+| $x^2 + x$ | $x + 1$ |
+| $x^2 + x + 1$ | $x^2$ |
+
+You can check one: $x \cdot (x^2 + 1) = x^3 + x \equiv (x + 1) + x = 1$.
+
+## The AES field
+
+AES fixes the field by fixing the reduction polynomial:
+
+$$
+P(x) = x^8 + x^4 + x^3 + x + 1.
+$$
+
+It's irreducible. It is one of 30 irreducible polynomials of degree 8 over $GF(2)$, and this is
+the one the AES standard specifies. Since it has degree 8, its bit pattern is nine bits long:
+$\texttt{1 0001 1011}$, or $\texttt{0x11B}$. The reduction rule is
+
+$$
+x^8 \equiv x^4 + x^3 + x + 1 \quad (\texttt{0x1B}).
+$$
+
+### A full GF(2⁸) multiplication
+
+Here's $\texttt{0x57} \cdot \texttt{0x83}$, the example used in the AES standard. As polynomials:
+
+$$
+\texttt{0x57} = x^6 + x^4 + x^2 + x + 1, \qquad \texttt{0x83} = x^7 + x + 1.
+$$
+
+Multiply out, cancelling pairs of equal terms:
+
+$$
+(x^6 + x^4 + x^2 + x + 1)(x^7 + x + 1)
+= x^{13} + x^{11} + x^9 + x^8 + x^6 + x^5 + x^4 + x^3 + 1.
+$$
+
+Now reduce by long division by $P(x)$, where each subtraction is an XOR. The leading term is
+$x^{13}$, so subtract $x^5 \cdot P(x) = x^{13} + x^9 + x^8 + x^6 + x^5$:
+
+$$
+x^{13} + x^{11} + x^9 + x^8 + x^6 + x^5 + x^4 + x^3 + 1
+- (x^{13} + x^9 + x^8 + x^6 + x^5)
+= x^{11} + x^4 + x^3 + 1.
+$$
+
+The leading term is now $x^{11}$, so subtract $x^3 \cdot P(x) = x^{11} + x^7 + x^6 + x^4 + x^3$:
+
+$$
+x^{11} + x^4 + x^3 + 1 - (x^{11} + x^7 + x^6 + x^4 + x^3) = x^7 + x^6 + 1.
+$$
+
+The degree is below 8, so we stop:
+
+$$
+\texttt{0x57} \cdot \texttt{0x83} = x^7 + x^6 + 1 = \texttt{0xC1}.
+$$
+
+### Multiplying in software: xtime
+
+Hardware and software don't multiply out full polynomials. Multiplying by $x$ (the byte
+$\texttt{0x02}$) is a left shift by one bit. If a 1 falls out into bit 8, the result has an $x^8$
+term, and you replace it using $x^8 \equiv \texttt{0x1B}$, which means XORing with
+$\texttt{0x1B}$. The AES standard calls this operation `xtime`.
+
+Starting from $\texttt{0x57}$:
+
+| Step | Shift | Overflow? | Result |
+| ---- | ----- | --------- | ------ |
+| $\texttt{0x57} \cdot \texttt{02}$ | $\texttt{0xAE}$ | no | $\texttt{0xAE}$ |
+| $\texttt{0x57} \cdot \texttt{04}$ | $\texttt{0x15C}$ | yes, XOR $\texttt{0x11B}$ | $\texttt{0x47}$ |
+| $\texttt{0x57} \cdot \texttt{08}$ | $\texttt{0x8E}$ | no | $\texttt{0x8E}$ |
+| $\texttt{0x57} \cdot \texttt{10}$ | $\texttt{0x11C}$ | yes, XOR $\texttt{0x11B}$ | $\texttt{0x07}$ |
+
+Any product is then a sum (XOR) of these. Since $\texttt{0x13} = \texttt{10} + \texttt{02} +
+\texttt{01}$:
+
+$$
+\texttt{0x57} \cdot \texttt{0x13} = \texttt{07} \oplus \texttt{AE} \oplus \texttt{57} = \texttt{0xFE}.
+$$
+
+Put into a loop, this is shift-and-add multiplication with XOR in place of addition:
+
+```python
+def gf_mul(a: int, b: int) -> int:
+    """Multiply two bytes in GF(2^8) with the AES polynomial."""
+    r = 0
+    while b:
+        if b & 1:
+            r ^= a          # add the current shifted copy of a
+        b >>= 1
+        a <<= 1             # multiply a by x
+        if a & 0x100:
+            a ^= 0x11B      # reduce: x^8 = x^4 + x^3 + x + 1
+    return r
+
+assert gf_mul(0x57, 0x83) == 0xC1
+assert gf_mul(0x57, 0x13) == 0xFE
+```
+
+Real implementations usually replace this loop with lookup tables, or with log and antilog
+tables, which turn multiplication into addition of exponents.
+
+## Inversion
+
+Division in $GF(2^8)$ is multiplication by an inverse: the $A^{-1}(x)$ with
+
+$$
+A(x) \cdot A^{-1}(x) \equiv 1 \bmod P(x).
+$$
+
+For $GF(2^3)$ we could read the inverses off a table. In general you use the extended Euclidean
+algorithm, run on polynomials instead of integers. It finds $s(x)$ and $t(x)$ with
+
+$$
+s(x) \cdot P(x) + t(x) \cdot A(x) = 1,
+$$
+
+and reducing modulo $P(x)$ leaves $t(x) \cdot A(x) \equiv 1$, so $t(x)$ is the inverse. Here's a small
+run so you can see it working.
+
+<Note title="Inverse of x² in GF(2³)">
+
+Divide repeatedly, keeping track of $t$ with $t_0 = 0$, $t_1 = 1$ and
+$t_{i} = t_{i-2} + q_{i-1} \cdot t_{i-1}$ (plus and minus are the same in $GF(2)$):
+
+1. $x^3 + x + 1 = x \cdot x^2 + (x + 1)$. Quotient $x$, so $t_2 = 0 + x \cdot 1 = x$.
+2. $x^2 = (x + 1)(x + 1) + 1$. Quotient $x + 1$, so $t_3 = 1 + (x + 1) \cdot x = x^2 + x + 1$.
+
+The remainder has reached 1, so the inverse is $t_3 = x^2 + x + 1$. Check:
+$x^2 (x^2 + x + 1) = x^4 + x^3 + x^2 \equiv (x^2 + x) + (x + 1) + x^2 = 1$. This matches the
+table above.
+
+</Note>
+
+The same algorithm in $GF(2^8)$ gives, for example, $\texttt{0x53}^{-1} = \texttt{0xCA}$. It
+takes four division steps:
+
+$$
+\begin{aligned}
+x^8 + x^4 + x^3 + x + 1 &= (x^2 + 1)(x^6 + x^4 + x + 1) + x^2 \\
+x^6 + x^4 + x + 1 &= (x^4 + x^2)\, x^2 + (x + 1) \\
+x^2 &= (x + 1)(x + 1) + 1
+\end{aligned}
+$$
+
+Tracking $t$ through those steps gives $t = x^7 + x^6 + x^3 + x = \texttt{0xCA}$, and
+`gf_mul(0x53, 0xCA)` returns 1.
+
+## Where AES uses each operation
+
+With the field in place, the AES layers come down to three operations:
+
+- **AddRoundKey** is addition in $GF(2^8)$: each state byte XORed with a key byte.
+- **SubBytes** maps each byte $A$ to $A^{-1}$ (with $0$ mapped to $0$), then applies a fixed
+  affine transformation over $GF(2)$. The inversion is the source of the S-box's nonlinearity.
+- **MixColumns** multiplies each 4-byte column by a fixed matrix whose entries are the field
+  elements $\texttt{01}$, $\texttt{02}$ and $\texttt{03}$.
+
+MixColumns only needs `xtime` and XOR. Multiplying by $\texttt{02}$ is `xtime`, and
+multiplying by $\texttt{03} = \texttt{02} + \texttt{01}$ is `xtime` plus the original byte. For the
+column $(\texttt{DB}, \texttt{13}, \texttt{53}, \texttt{45})$, the first output byte is
+
+$$
+\texttt{02} \cdot \texttt{DB} \oplus \texttt{03} \cdot \texttt{13} \oplus \texttt{53} \oplus \texttt{45}.
+$$
+
+- $\texttt{02} \cdot \texttt{DB}$: the shift gives $\texttt{0x1B6}$, which overflows, and XOR
+  with $\texttt{0x11B}$ gives $\texttt{0xAD}$.
+- $\texttt{03} \cdot \texttt{13} = \texttt{26} \oplus \texttt{13} = \texttt{0x35}$.
+- $\texttt{AD} \oplus \texttt{35} \oplus \texttt{53} \oplus \texttt{45} = \texttt{0x8E}$.
+
+The full column comes out as $(\texttt{8E}, \texttt{4D}, \texttt{A1}, \texttt{BC})$.
+
+## Summary
+
+- A field is a set with addition, subtraction, multiplication and division, all closed in the
+  set. Formally it's two abelian groups joined by the distributive law.
+- Finite fields exist only with $p^m$ elements.
+- $GF(p)$ is integer arithmetic mod a prime $p$. With a composite modulus you get zero divisors,
+  so some elements have no inverse.
+- $GF(2^m)$ elements are polynomials with bit coefficients, so an element of $GF(2^8)$ is a byte.
+- Addition is XOR. Multiplication is polynomial multiplication reduced modulo an irreducible
+  $P(x)$. For AES that polynomial is $x^8 + x^4 + x^3 + x + 1$ ($\texttt{0x11B}$).
+- Inverses come from the extended Euclidean algorithm on polynomials, and they're the core of the
+  AES S-box.
