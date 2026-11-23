@@ -5,6 +5,17 @@ backend:
   name: github
   repo: sinhaparth5/educational-docs
   branch: master
+  # Match the repo's Conventional Commit history
+  commit_messages:
+    create: 'feat(posts): add {{slug}}'
+    update: 'fix(posts): update {{slug}}'
+    delete: 'chore(posts): remove {{slug}}'
+    uploadMedia: 'chore(media): upload {{path}}'
+    deleteMedia: 'chore(media): delete {{path}}'
+  # "Sign In with GitHub" instead of pasting a token: deploy sveltia-cms-auth
+  # (https://github.com/sveltia/sveltia-cms-auth) as a Cloudflare Worker, then uncomment.
+  # Token sign-in keeps working alongside it.
+  # base_url: https://sveltia-cms-auth.<your-subdomain>.workers.dev
 
 site_url: https://edu.parthsinha.com
 
@@ -26,23 +37,50 @@ collections:
     media_folder: images
     public_folder: ./images
     sortable_fields: [date, title]
-    # Preview (public/admin/preview.js) renders KaTeX; MDX components and citations need `astro dev`.
+    # "View live" link for published posts
+    preview_path: '/posts/{{slug}}/'
+    # public/admin/preview.js renders KaTeX, the MDX components, [@cite] citations and adds
+    # insert buttons for Theorem, Proof, Note, Sidenote and DocCard. Interactive viz islands
+    # only show on the site (`astro dev`).
     fields:
       - { name: title, label: Title, widget: string }
-      - { name: description, label: Description, widget: text }
+      - name: description
+        label: Description
+        widget: text
+        hint: Shown in search results and link previews; about 160 characters reads best.
       - { name: date, label: Date, widget: datetime, type: date }
       - { name: updated, label: Updated, widget: datetime, type: date, required: false }
       - { name: featured, label: Featured, widget: boolean, default: false, required: false }
-      - { name: tags, label: Tags, widget: list, required: false }
+      # A fixed list so tag pages don't split on typos (risc-v vs riscv). New tag? Add it here.
+      - name: tags
+        label: Tags
+        widget: select
+        multiple: true
+        required: false
+        options:
+          [aes, cpp, cryptography, embedded, esp32, finite-fields, fpga, git, hardware, hdmi,
+           math, react, risc-v, tang-nano-9k, terminal, tui, uart, verilog, websocket]
       - { name: draft, label: Draft, widget: boolean, default: true, required: false }
-      - { name: cover, label: Cover (1200×630), widget: image, required: false }
-      - { name: coverAlt, label: Cover alt text, widget: text, required: false }
+      - name: cover
+        label: Cover
+        widget: image
+        required: false
+        hint: 1200×630. Used as the social preview and on the home page; without one a card is generated.
+      - name: coverAlt
+        label: Cover alt text
+        widget: text
+        required: false
+        hint: Describe the cover for screen readers. Fill this in whenever a cover is set.
       - name: series
         label: Series
         widget: object
         required: false
         fields:
-          - { name: name, label: Name, widget: string }
+          # New series? Add its name here.
+          - name: name
+            label: Name
+            widget: select
+            options: ['AES with Christof Paar', 'RISC-V SoC on a Tang Nano 9K']
           - { name: part, label: Part, widget: number, value_type: int, min: 1 }
       # Raw mode only: the rich-text editor would rewrite $math$, imports and [@cite] keys.
       - { name: body, label: Body, widget: richtext, modes: [raw] }
