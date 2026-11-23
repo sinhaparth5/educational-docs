@@ -8,9 +8,10 @@ backend:
 
 site_url: https://edu.parthsinha.com
 
-# Post images live next to the posts and are referenced as ./images/<file>
-media_folder: src/content/posts/images
-public_folder: ./images
+# Global media library (must be an absolute URL path). Post images are set per collection
+# below and live next to the posts as ./images/<file>.
+media_folder: public/images
+public_folder: /images
 
 collections:
   - name: posts
