@@ -39,12 +39,12 @@
 		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://*.googletagmanager.com https://giscus.app https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://giscus.app; font-src 'self' data:; img-src 'self' data: https://*.google-analytics.com https://*.googletagmanager.com; connect-src 'self' https://cloudflareinsights.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; frame-src https://giscus.app https://www.googletagmanager.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
 	}
 
-	# Sveltia CMS: bundle from unpkg, fonts from jsDelivr, the GitHub API for the repo,
+	# Sveltia CMS: bundle and KaTeX (script, CSS, fonts) from unpkg, fonts from jsDelivr, the GitHub API for the repo,
 	# and repo images/avatars from githubusercontent.
 	# ponytail: GitHub hosts taken from how the backend works, not from Sveltia's CSP builder;
 	# if the console shows a CSP block on /admin/, add that host here.
 	header /admin/* {
-		Content-Security-Policy "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'; font-src 'self' https://cdn.jsdelivr.net; img-src 'self' blob: data: https://*.githubusercontent.com; media-src blob:; frame-src blob:; worker-src blob:; manifest-src blob:; connect-src 'self' blob: data: https://unpkg.com https://api.github.com https://*.githubusercontent.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+		Content-Security-Policy "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; font-src 'self' https://cdn.jsdelivr.net https://unpkg.com; img-src 'self' blob: data: https://*.githubusercontent.com; media-src blob:; frame-src blob:; worker-src blob:; manifest-src blob:; connect-src 'self' blob: data: https://unpkg.com https://api.github.com https://*.githubusercontent.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 		Cache-Control no-cache
 	}
 

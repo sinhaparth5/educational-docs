@@ -26,9 +26,7 @@ collections:
     media_folder: images
     public_folder: ./images
     sortable_fields: [date, title]
-    # The preview can't render KaTeX, MDX components or citations; use `astro dev` for that.
-    editor:
-      preview: false
+    # Preview (public/admin/preview.js) renders KaTeX; MDX components and citations need `astro dev`.
     fields:
       - { name: title, label: Title, widget: string }
       - { name: description, label: Description, widget: text }
