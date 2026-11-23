@@ -1,0 +1,49 @@
+# Sveltia CMS: open /admin/ and use "Sign In with Token" (fine-grained PAT, this repo only,
+# Contents read/write). Locally, `bunx astro dev` + /admin/index.html in Chromium offers
+# "Work with Local Repository". Fields mirror src/content.config.ts; keep them in sync.
+backend:
+  name: github
+  repo: sinhaparth5/educational-docs
+  branch: master
+
+site_url: https://edu.parthsinha.com
+
+# Post images live next to the posts and are referenced as ./images/<file>
+media_folder: src/content/posts/images
+public_folder: ./images
+
+collections:
+  - name: posts
+    label: Posts
+    label_singular: Post
+    folder: src/content/posts
+    extension: mdx
+    format: frontmatter
+    create: true
+    slug: '{{slug}}'
+    identifier_field: title
+    media_folder: images
+    public_folder: ./images
+    sortable_fields: [date, title]
+    # The preview can't render KaTeX, MDX components or citations; use `astro dev` for that.
+    editor:
+      preview: false
+    fields:
+      - { name: title, label: Title, widget: string }
+      - { name: description, label: Description, widget: text }
+      - { name: date, label: Date, widget: datetime, type: date }
+      - { name: updated, label: Updated, widget: datetime, type: date, required: false }
+      - { name: featured, label: Featured, widget: boolean, default: false, required: false }
+      - { name: tags, label: Tags, widget: list, required: false }
+      - { name: draft, label: Draft, widget: boolean, default: true, required: false }
+      - { name: cover, label: Cover (1200×630), widget: image, required: false }
+      - { name: coverAlt, label: Cover alt text, widget: text, required: false }
+      - name: series
+        label: Series
+        widget: object
+        required: false
+        fields:
+          - { name: name, label: Name, widget: string }
+          - { name: part, label: Part, widget: number, value_type: int, min: 1 }
+      # Raw mode only: the rich-text editor would rewrite $math$, imports and [@cite] keys.
+      - { name: body, label: Body, widget: richtext, modes: [raw] }
